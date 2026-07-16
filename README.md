@@ -1,5 +1,9 @@
 # 📸 Japanese Street Photobooth
 
+<a href="https://github.com/grvsnh/photobooth/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=grvsnh/photobooth" />
+</a>
+
 A highly interactive, visually stunning web-based Japanese street-inspired photobooth simulation. Transition seamlessly from a neon-lit Tokyo alleyway into a retro photobooth to capture, process, and print gorgeous vintage-style photo strips with procedural paper substrates, analog film filters, dust, grain, and scratches.
 
 ---
