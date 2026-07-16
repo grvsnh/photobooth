@@ -467,9 +467,26 @@ window.Cloth = (function () {
           const wRow = Math.exp(-(rowDist * rowDist) / 16.0);
           const weight = wCol * wRow * this.state.dragIntensity;
 
-          targetX += (this.state.dragX - targetX) * weight;
+          let dx = this.state.dragX - targetX;
+          let dy = this.state.dragY - targetY;
+
+          const dist = Math.hypot(dx, dy);
+
+          const SOFT_LIMIT = 0.35;
+
+          if (dist > SOFT_LIMIT) {
+            const excess = dist - SOFT_LIMIT;
+
+            // Resistance grows with distance
+            const resistance = 1 / (1 + excess * 8);
+
+            dx *= resistance;
+            dy *= resistance;
+          }
+
+          targetX += dx * weight;
           const anchorLock = Math.min(1.0, v * 5.0);
-          targetY += (this.state.dragY - targetY) * weight * anchorLock;
+          targetY += dy * weight * anchorLock;
           targetZ += 0.38 * weight * anchorLock;
         }
 
@@ -528,9 +545,26 @@ window.Cloth = (function () {
           const wRow = Math.exp(-(rowDist * rowDist) / 16.0);
           const weight = wCol * wRow * this.state.dragIntensity;
 
-          targetX += (this.state.dragX - targetX) * weight;
+          let dx = this.state.dragX - targetX;
+          let dy = this.state.dragY - targetY;
+
+          const dist = Math.hypot(dx, dy);
+
+          const SOFT_LIMIT = 0.35;
+
+          if (dist > SOFT_LIMIT) {
+            const excess = dist - SOFT_LIMIT;
+
+            // Resistance grows with distance
+            const resistance = 1 / (1 + excess * 8);
+
+            dx *= resistance;
+            dy *= resistance;
+          }
+
+          targetX += dx * weight;
           const anchorLock = Math.min(1.0, v * 5.0);
-          targetY += (this.state.dragY - targetY) * weight * anchorLock;
+          targetY += dy * weight * anchorLock;
           targetZ += 0.38 * weight * anchorLock;
         }
 
