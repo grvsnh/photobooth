@@ -260,6 +260,70 @@ window.Filters = (function () {
     }
   }
 
+  /* ---------- Noir (High contrast B&W) ---------- */
+  function noir(ctx, w, h, opts = {}) {
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let r = d[i], g = d[i+1], b = d[i+2];
+      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+      gray = (gray - 128) * 1.25 + 128;
+      gray = Math.max(0, Math.min(255, gray));
+      d[i] = gray; d[i+1] = gray; d[i+2] = gray;
+    }
+    ctx.putImageData(img, 0, 0);
+    if (opts.blur !== false) _boxBlur(ctx, w, h, opts.blurRadius ?? 1);
+    if (opts.vignette !== false) vignette(ctx, w, h, opts.vignetteStrength ?? 0.55);
+  }
+
+  /* ---------- Warm Gold ---------- */
+  function warm(ctx, w, h, opts = {}) {
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let r = d[i], g = d[i+1], b = d[i+2];
+      d[i] = Math.min(255, r * 1.15);
+      d[i+1] = Math.min(255, g * 1.05);
+      d[i+2] = Math.max(0, b * 0.82);
+    }
+    ctx.putImageData(img, 0, 0);
+    if (opts.blur !== false) _boxBlur(ctx, w, h, opts.blurRadius ?? 1);
+    if (opts.vignette !== false) vignette(ctx, w, h, opts.vignetteStrength ?? 0.55);
+  }
+
+  /* ---------- Cool Blue ---------- */
+  function cool(ctx, w, h, opts = {}) {
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let r = d[i], g = d[i+1], b = d[i+2];
+      d[i] = Math.max(0, r * 0.82);
+      d[i+1] = Math.min(255, g * 1.05);
+      d[i+2] = Math.min(255, b * 1.25);
+    }
+    ctx.putImageData(img, 0, 0);
+    if (opts.blur !== false) _boxBlur(ctx, w, h, opts.blurRadius ?? 1);
+    if (opts.vignette !== false) vignette(ctx, w, h, opts.vignetteStrength ?? 0.55);
+  }
+
+  /* ---------- Cyberpink Neon ---------- */
+  function neon(ctx, w, h, opts = {}) {
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let r = d[i], g = d[i+1], b = d[i+2];
+      let gray = (r + g + b) / 3;
+      if (gray > 128) {
+        d[i] = 255; d[i+1] = Math.max(0, g * 0.4); d[i+2] = 180;
+      } else {
+        d[i] = 0; d[i+1] = Math.min(255, g * 1.3); d[i+2] = Math.min(255, b * 1.5);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    if (opts.blur !== false) _boxBlur(ctx, w, h, opts.blurRadius ?? 1);
+    if (opts.vignette !== false) vignette(ctx, w, h, opts.vignetteStrength ?? 0.55);
+  }
+
   /* ---------- Internal: edge darkening ---------- */
   function _edgeDarken(ctx, w, h, strength) {
     const g = ctx.createRadialGradient(
@@ -274,6 +338,10 @@ window.Filters = (function () {
 
   return {
     vintage,
+    noir,
+    warm,
+    cool,
+    neon,
     addGrain,
     addDust,
     addScratches,

@@ -441,6 +441,18 @@ body::before {
   margin: 0;
   pointer-events: auto !important;
 }
+/* When placed as standalone fixed overlay (outside booth scene) */
+.strip-preview--fixed {
+  position: fixed !important;
+  z-index: 150 !important;
+}
+.preview-overlay--fixed {
+  position: fixed !important;
+  inset: 0;
+  background: rgba(10, 6, 4, 0.72);
+  z-index: 149;
+  backdrop-filter: blur(4px);
+}
 .strip-preview__eyebrow {
   align-self: stretch;
   padding-bottom: 10px;

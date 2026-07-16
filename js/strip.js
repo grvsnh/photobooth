@@ -23,6 +23,9 @@ window.Strip = (function () {
   };
 
   function build(captures, opts = {}) {
+    if (!captures || !captures.length) {
+      return document.createElement('canvas');
+    }
     const paperStyle = opts.paperStyle || 'vintage';
     const aspectKey = opts.aspectRatio || '3x4';
     const aspect = ASPECTS[aspectKey] || ASPECTS['3x4'];
@@ -52,7 +55,7 @@ window.Strip = (function () {
 
     // Build paper substrate with dynamic height
     const paper = Paper.generate(outW, outH, paperStyle);
-    const ctx = paper.getContext('2d');
+    const ctx = paper.getContext('2d', { willReadFrequently: true });
 
     for (let i = 0; i < n; i++) {
       const cap = captures[Math.min(i, captures.length - 1)];
@@ -62,7 +65,7 @@ window.Strip = (function () {
       const frame = document.createElement('canvas');
       frame.width = frameW;
       frame.height = frameH;
-      const fctx = frame.getContext('2d');
+      const fctx = frame.getContext('2d', { willReadFrequently: true });
 
       // Cover-fit the capture into the frame
       const cw = cap.width, ch = cap.height;
@@ -84,7 +87,9 @@ window.Strip = (function () {
 
       // Apply per-frame vintage processing (unique variation per frame)
       const variation = (Math.random() - 0.5) * 8; // exposure ±4
-      Filters.vintage(fctx, frameW, frameH, {
+      const filterStyle = opts.filterStyle || 'vintage';
+      
+      const filterOpts = {
         liftBlacks: 18 + (Math.random() - 0.5) * 6,
         contrastMul: 0.82 + Math.random() * 0.08,
         warmTintR: 1.04 + Math.random() * 0.06,
@@ -93,7 +98,24 @@ window.Strip = (function () {
         exposureShift: variation,
         blurRadius: 1,
         vignetteStrength: 0.55 + Math.random() * 0.15,
-      });
+      };
+
+      if (filterStyle === 'vintage') {
+        Filters.vintage(fctx, frameW, frameH, filterOpts);
+      } else if (filterStyle === 'bw') {
+        Filters.noir(fctx, frameW, frameH, filterOpts);
+      } else if (filterStyle === 'warm') {
+        Filters.warm(fctx, frameW, frameH, filterOpts);
+      } else if (filterStyle === 'cool') {
+        Filters.cool(fctx, frameW, frameH, filterOpts);
+      } else if (filterStyle === 'neon') {
+        Filters.neon(fctx, frameW, frameH, filterOpts);
+      } else {
+        // none: unfiltered, but still add standard vignette/blur if active
+        if (filterOpts.blurRadius > 0) {
+          Filters.vignette(fctx, frameW, frameH, filterOpts.vignetteStrength);
+        }
+      }
 
       // Blend onto paper
       fctx.globalCompositeOperation = 'source-over';

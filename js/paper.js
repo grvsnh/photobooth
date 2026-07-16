@@ -83,7 +83,7 @@ window.Paper = (function () {
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const rnd = makeRng((Math.random() * 1e9) | 0);
 
     /* 1. Base warm tone with brightness variation across the surface */

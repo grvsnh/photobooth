@@ -160,23 +160,14 @@
   async function _finishCaptureBatch() {
     isBusy = true;
     Camera.stop();
-    _startInlinePreview();
-  }
-
-  function _startInlinePreview() {
-    if (!captures.length) {
+    
+    // Immediately exit the booth and start printing on the outside slot
+    await Scenes.exitBooth();
+    if (captures.length) {
+      await _startPrinting();
+    } else {
       isBusy = false;
-      return;
     }
-
-    const stripCanvas = Strip.build(captures, {
-      paperStyle: state.paperStyle,
-      aspectRatio: state.aspectRatio,
-      timestamp: { enabled: false, format: 'DMY_HM', date: null },
-      maxWidth: state.downloadQuality === 'high' ? 1200 : 720,
-    });
-
-    Printer.showInline(stripCanvas);
   }
 
   async function _startPrinting() {
@@ -190,16 +181,17 @@
       maxWidth: state.downloadQuality === 'high' ? 1200 : 720,
     });
 
-    // 2. Show the printer stage viewport
-    Printer.show(stripCanvas);
+    // 2. Get the physical printer slot on the booth exterior
+    const slotEl = document.getElementById('printerSlot');
 
-    // 3. Emerge the strip from the slot (awaits animation complete)
-    await Printer.startPrinting();
+    // 3. Animate strip growing out of the slot
+    await Printer.emergeFromSlot(slotEl, stripCanvas, captures, state);
 
-    // 4. Enable user dragging/pulling interaction to slide and tear the strip
-    Printer.enablePull(() => {
-      isBusy = false;
-    });
+    // 4. Strip fully emerged — remove it and show name/date/filter form
+    await UI.wait(350);
+    Printer.removeEmergingStrip();
+    Printer.showInline(stripCanvas, captures, state);
+    isBusy = false;
   }
 
   function _bindPrinter() {

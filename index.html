@@ -154,7 +154,7 @@
       </div>
 
       <!-- Floor reflection / shadow -->
-      <div class="booth__shadow"></div>
+      <!-- <div class="booth__shadow"></div> -->
     </section>
 
     <!-- ======================================================= -->
@@ -209,38 +209,6 @@
           </button>
         </div>
 
-        <!-- Glass backdrop overlay for preview mode (prevents stacking context blur bugs) -->
-        <div id="previewOverlay" class="preview-overlay" hidden></div>
-
-        <!-- Photo strip preview card overlay inside the booth (developing Polaroid effect) -->
-        <div id="stripPreview" class="strip-preview" hidden>
-          <div class="strip-preview__eyebrow">YOUR STRIP · DEVELOPING…</div>
-          <canvas id="previewCanvas" class="strip-preview__canvas"></canvas>
-          <div class="strip-preview__details" id="previewDetails">
-            <input id="previewName" class="strip-preview__input" type="text" maxlength="28" placeholder="YOUR NAME" autocomplete="off">
-            <input id="previewDateInput" class="strip-preview__input" type="date" aria-label="Add a date">
-            <button id="applyDetailsBtn" class="strip-preview__apply" type="button">ADD DETAILS</button>
-          </div>
-          
-          <!-- Printing actions nested directly inside the card overlay -->
-          <div class="printer-stage__actions" style="margin-top: 14px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; z-index: 10;">
-            <button id="downloadBtn" class="download-btn" type="button" disabled>
-              <span class="download-btn__rim"></span>
-              <span class="download-btn__cap">
-                <span class="download-btn__icon">↓</span>
-                <span class="download-btn__label">DOWNLOAD</span>
-              </span>
-            </button>
-
-            <button id="newPhotoBtn" class="new-photo-btn" type="button">
-              <span class="new-photo-btn__rim"></span>
-              <span class="new-photo-btn__cap">
-                <span class="new-photo-btn__icon">↻</span>
-                <span class="new-photo-btn__label">NEW PHOTO</span>
-              </span>
-            </button>
-          </div>
-        </div>
 
       </div>
     </section>
@@ -302,6 +270,50 @@
     <div class="printer-stage__viewport">
       <canvas id="stripCanvas" class="strip-physics-canvas"></canvas>
     </div>
+  </div>
+</div>
+
+<!-- ======================================================= -->
+<!-- Strip details overlay — appears after strip emerges     -->
+<!-- ======================================================= -->
+<div id="previewOverlay" class="preview-overlay preview-overlay--fixed" hidden></div>
+
+<div id="stripPreview" class="strip-preview strip-preview--fixed" hidden>
+  <div class="strip-preview__eyebrow">YOUR STRIP · DEVELOPING…</div>
+  <canvas id="previewCanvas" class="strip-preview__canvas"></canvas>
+  <div class="strip-preview__details" id="previewDetails">
+    <input id="previewName" class="strip-preview__input" type="text" maxlength="28" placeholder="YOUR NAME" autocomplete="off">
+    <input id="previewDateInput" class="strip-preview__input" type="date" aria-label="Add a date">
+    <div class="strip-preview__filters">
+      <label for="filterSelect" class="strip-preview__label">FILTER:</label>
+      <select id="filterSelect" class="strip-preview__select">
+        <option value="vintage">VINTAGE SEPIA</option>
+        <option value="bw">NOIR (B&W)</option>
+        <option value="warm">WARM GOLD</option>
+        <option value="cool">COOL BLUE</option>
+        <option value="neon">CYBERPINK</option>
+        <option value="none">UNFILTERED</option>
+      </select>
+    </div>
+    <button id="applyDetailsBtn" class="strip-preview__apply" type="button">ADD DETAILS</button>
+  </div>
+  
+  <div class="printer-stage__actions" style="margin-top: 14px; width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; z-index: 10;">
+    <button id="downloadBtn" class="download-btn" type="button" disabled>
+      <span class="download-btn__rim"></span>
+      <span class="download-btn__cap">
+        <span class="download-btn__icon">↓</span>
+        <span class="download-btn__label">DOWNLOAD</span>
+      </span>
+    </button>
+
+    <button id="newPhotoBtn" class="new-photo-btn" type="button">
+      <span class="new-photo-btn__rim"></span>
+      <span class="new-photo-btn__cap">
+        <span class="new-photo-btn__icon">↻</span>
+        <span class="new-photo-btn__label">NEW PHOTO</span>
+      </span>
+    </button>
   </div>
 </div>
 

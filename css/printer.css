@@ -22,6 +22,137 @@
   pointer-events: none;
 }
 
+/* New HTML structure: printer-stage__panel, header, mouth, viewport */
+.printer-stage__panel {
+  position: relative;
+  z-index: 2;
+  width: min(380px, 82vw);
+  display: flex;
+  flex-direction: column;
+  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.8));
+}
+
+.printer-stage__header {
+  background: linear-gradient(180deg, var(--metal-light, #b8a98c) 0%, var(--metal-dark, #7a6a55) 100%);
+  border: 2px solid var(--ink, #1a1209);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,220,160,0.2);
+}
+
+.printer-stage__lamp {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--metal-dark, #7a6a55);
+  box-shadow: inset 0 0 4px rgba(0,0,0,0.6);
+  flex-shrink: 0;
+  transition: background-color 0.4s ease;
+}
+.printer-stage__lamp.is-printing {
+  animation: printer-lamp-active 0.6s ease-in-out infinite;
+}
+
+.printer-stage__title {
+  font-family: var(--font-display, monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.3em;
+  color: var(--cream, #f8f1e5);
+  text-shadow: 1px 1px 0 var(--ink, #1a1209);
+}
+
+/* The slot mouth where strip emerges */
+.printer-stage__mouth {
+  position: relative;
+  height: min(420px, 52vh);
+  background: linear-gradient(180deg, var(--metal, #9a8870) 0%, var(--metal-dark, #7a6a55) 100%);
+  border: 2px solid var(--ink, #1a1209);
+  border-top: none;
+  border-bottom: none;
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,0.7),
+    inset 4px 0 0 rgba(0,0,0,0.3),
+    inset -4px 0 0 rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+
+.printer-stage__lip {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 52%;
+  height: 28px;
+  background: #000;
+  border-radius: 0 0 8px 8px;
+  box-shadow:
+    inset 0 4px 8px rgba(0,0,0,0.95),
+    0 2px 0 rgba(255,220,160,0.05);
+  z-index: 2;
+}
+
+.printer-stage__motor {
+  position: absolute;
+  top: 8px; right: 12px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--metal-light, #b8a98c), var(--metal-dark, #7a6a55));
+  border: 2px solid var(--ink, #1a1209);
+  z-index: 3;
+}
+.printer-stage__motor.is-active {
+  animation: motor-hum 0.08s linear infinite;
+}
+
+/* The strip canvas viewport fills the mouth slot */
+.printer-stage__viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+.strip-physics-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  display: block;
+}
+.strip-physics-canvas:active { cursor: grabbing; }
+
+/* Instruction text below slot */
+.printer-stage__instruction {
+  font-family: var(--font-display, monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.25em;
+  color: rgba(255,200,140,0.5);
+  text-align: center;
+  padding: 6px 0;
+  min-height: 1.4em;
+  background: linear-gradient(180deg, var(--metal-dark, #7a6a55) 0%, var(--ink, #1a1209) 100%);
+  border: 2px solid var(--ink, #1a1209);
+  border-top: none;
+  border-bottom: none;
+}
+.printer-stage__instruction.is-prompt {
+  color: #f0b23a;
+  text-shadow: 0 0 12px rgba(240,178,58,0.7);
+  animation: fade-rise 0.6s ease;
+}
+.printer-stage__instruction.is-pulse {
+  color: #6ef5b0;
+  text-shadow: 0 0 10px rgba(110,245,176,0.6);
+  animation: fade-rise 0.6s ease;
+}
+.printer-stage__instruction.is-success {
+  color: #6ef5b0;
+  text-shadow: 0 0 10px rgba(110,245,176,0.6);
+}
+
 /* The printer machine -------------------------------------- */
 .printer-machine {
   position: relative;

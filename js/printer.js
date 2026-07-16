@@ -20,8 +20,11 @@ window.Printer = (function () {
 
   let stripImage = null;     // the finished strip canvas (image source)
   let baseStripImage = null; // untouched strip used for detail edits
+  let currentCaptures = null;
+  let currentState = null;
   let pullActive = false;
   let detached = false;
+  let hasDeveloped = false;
   let renderLoop = null;
   let downloadCb = null;
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -44,9 +47,11 @@ window.Printer = (function () {
   let onPullComplete = null;
 
   /* ---------- Show / hide ---------- */
-  function show(stripCanvas) {
+  function show(stripCanvas, captures, state) {
     stripImage = stripCanvas;
     baseStripImage = stripCanvas;
+    currentCaptures = captures;
+    currentState = state;
     detached = false;
     pullActive = false;
     isPrinting = false;
@@ -106,20 +111,35 @@ window.Printer = (function () {
       const mt = motor();
       if (mt) mt.classList.add('is-active');
 
+      // Compute emerge target from the canvas height so the strip actually comes out
+      const canvas = stripCanvasEl();
+      // The slot lip is at y=14. Strip starts with bottom at y=14 (entirely hidden).
+      // It needs to travel until its bottom is near the canvas bottom.
+      // canvasH / dpr gives the CSS pixel height. We want most of the strip visible.
+      const canvasH = canvas ? (canvas.height / dpr) : 340;
+      // sh (strip height in CSS px) = sw * 2.5 = (canvasW * 0.65) * 2.5
+      const canvasW = canvas ? (canvas.width / dpr) : 280;
+      const sw = Math.round(canvasW * 0.65);
+      const sh = Math.round(sw * 2.5);
+      // Strip center at emerge-end: cy = canvasH - 30
+      // cy = 14 + emergeTarget - sh/2  =>  emergeTarget = canvasH - 30 - 14 + sh/2
+      const emergeTarget = Math.max(sh * 0.8, canvasH - 44 + sh / 2);
+
       function step() {
         if (!isPrinting) return;
         
-        // Emerge over 2.6 seconds
-        printTime += 16.67; 
-        emergeProgress = Math.min(1, printTime / 2600);
+        // Emerge over 3.0 seconds with eased motion
+        printTime += 16.67;
+        const rawProgress = Math.min(1, printTime / 3000);
+        // Ease-out cubic for natural deceleration
+        emergeProgress = 1 - Math.pow(1 - rawProgress, 3);
         
-        // Custom easing: slow start, fast slide, cushion bounce at end
-        stripY = emergeProgress * 240; 
+        stripY = emergeProgress * emergeTarget;
         
         // Wiggle horizontally slightly to simulate motor gears printing
-        stripX = Math.sin(printTime * 0.05) * 0.75 * (1 - emergeProgress);
+        stripX = Math.sin(printTime * 0.05) * 1.2 * (1 - rawProgress);
 
-        if (emergeProgress < 1) {
+        if (rawProgress < 1) {
           requestAnimationFrame(step);
         } else {
           // Finish printing
@@ -222,9 +242,10 @@ window.Printer = (function () {
     detached = true;
     isDragging = false;
     
-    // Animate falling off
+    // Animate falling off — use canvas pixel height
     const canvas = stripCanvasEl();
-    const targetY = canvas.clientHeight + 200;
+    const canvasH = canvas ? (canvas.height / dpr) : 340;
+    const targetY = stripY + canvasH + 200;
 
     const inEl = instr();
     if (inEl) {
@@ -255,42 +276,70 @@ window.Printer = (function () {
   }
 
   /* ---------- Canvas rendering ---------- */
-  function _showPreview() {
+  function _showPreview(instant = false) {
     // Redraws the static canvas inside the details overlay
-    _drawDevelopingPolaroid();
+    _drawDevelopingPolaroid(instant);
+  }
+
+  function _rebuildAndShow() {
+    if (!currentCaptures || !currentState) return;
+
+    const filterEl = document.getElementById('filterSelect');
+    const selectedFilter = filterEl?.value || 'vintage';
+
+    // 1. Build the updated strip from captures with the chosen filterStyle!
+    const newStrip = Strip.build(currentCaptures, {
+      paperStyle: currentState.paperStyle,
+      aspectRatio: currentState.aspectRatio,
+      filterStyle: selectedFilter,
+      timestamp: { enabled: false, format: 'DMY_HM', date: null },
+      maxWidth: currentState.downloadQuality === 'high' ? 1200 : 720,
+    });
+
+    baseStripImage = newStrip;
+
+    // 2. Re-apply name/date if already filled/submitted
+    const name = nameInput()?.value.trim() || '';
+    const rawDate = dateInput()?.value || '';
+
+    if (name || rawDate) {
+      const footerHeight = Math.max(84, Math.round(newStrip.width * 0.1));
+      const detailed = document.createElement('canvas');
+      detailed.width = newStrip.width;
+      detailed.height = newStrip.height + footerHeight;
+      
+      const ctx = detailed.getContext('2d');
+      ctx.fillStyle = '#fffaf0';
+      ctx.fillRect(0, 0, detailed.width, detailed.height);
+      ctx.drawImage(newStrip, 0, 0);
+      ctx.fillStyle = '#292b35';
+      ctx.fillRect(0, newStrip.height, detailed.width, 2);
+      ctx.fillStyle = '#292b35';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.max(18, Math.round(newStrip.width * 0.035))}px Arial, sans-serif`;
+      
+      const dateText = rawDate ? new Date(`${rawDate}T00:00:00`).toLocaleDateString() : '';
+      ctx.fillText([name, dateText].filter(Boolean).join('  ·  '), detailed.width / 2, newStrip.height + footerHeight / 2);
+      
+      stripImage = detailed;
+    } else {
+      stripImage = newStrip;
+    }
+
+    _showPreview(true);
   }
 
   function _applyDetails() {
-    if (!baseStripImage) return;
+    if (!currentCaptures) return;
     const name = nameInput()?.value.trim() || '';
     const rawDate = dateInput()?.value || '';
     if (!name && !rawDate) {
       UI.toast('Add a name or date first.');
       return;
     }
-
-    const footerHeight = Math.max(84, Math.round(baseStripImage.width * 0.1));
-    const detailed = document.createElement('canvas');
-    detailed.width = baseStripImage.width;
-    detailed.height = baseStripImage.height + footerHeight;
-    
-    const ctx = detailed.getContext('2d');
-    ctx.fillStyle = '#fffaf0';
-    ctx.fillRect(0, 0, detailed.width, detailed.height);
-    ctx.drawImage(baseStripImage, 0, 0);
-    ctx.fillStyle = '#292b35';
-    ctx.fillRect(0, baseStripImage.height, detailed.width, 2);
-    ctx.fillStyle = '#292b35';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `600 ${Math.max(18, Math.round(baseStripImage.width * 0.035))}px Arial, sans-serif`;
-    
-    const dateText = rawDate ? new Date(`${rawDate}T00:00:00`).toLocaleDateString() : '';
-    ctx.fillText([name, dateText].filter(Boolean).join('  ·  '), detailed.width / 2, baseStripImage.height + footerHeight / 2);
-    
-    stripImage = detailed;
-    _showPreview();
-    applyDetailsBtn().textContent = 'DETAILS ADDED';
+    _rebuildAndShow();
+    if (applyDetailsBtn()) applyDetailsBtn().textContent = 'DETAILS ADDED';
   }
 
   /* ---------- Internal: render loop ---------- */
@@ -315,11 +364,16 @@ window.Printer = (function () {
   function _drawStrip(dt) {
     const canvas = stripCanvasEl();
     if (!canvas) return;
+    
+    // Use the actual canvas pixel dimensions (set by _resizeCanvas)
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    if (w <= 0 || h <= 0) return;
+    
     const ctx = canvas.getContext('2d');
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-
     ctx.save();
+    
+    // Fill with transparent background (not white)
     ctx.clearRect(0, 0, w, h);
 
     // Only draw the portion of the strip that is below the slot lip (y > 14)
@@ -327,9 +381,13 @@ window.Printer = (function () {
     ctx.rect(0, 14, w, h - 14);
     ctx.clip();
 
-    // If not dragging and not detached, snap back slowly to default printing location
+    // If not dragging and not detached, snap to final emerge position
     if (!isDragging && !detached && !isPrinting) {
-      stripY += (240 - stripY) * 0.16;
+      const canvasH = h;
+      const sw2 = Math.round(w * 0.65);
+      const sh2 = Math.round(sw2 * 2.5);
+      const finalY = Math.max(sw2 * 0.8, canvasH - 44 + sh2 / 2);
+      stripY += (finalY - stripY) * 0.16;
     }
 
     // Pendulum swing swaying math
@@ -345,8 +403,9 @@ window.Printer = (function () {
       stripAngle = -Math.sin(performance.now() * 0.005) * 0.035;
     }
 
-    const sw = 140; // display width of strip
-    const sh = 350; // display height of strip
+    // Scale strip display width to the canvas width
+    const sw = Math.round(w * 0.65);
+    const sh = Math.round(sw * 2.5); // photo strip is tall
     const cx = w / 2 + stripX;
     
     // Slot is at Y = 14. Top of strip starts emerging from Y=14
@@ -357,10 +416,10 @@ window.Printer = (function () {
       ctx.rotate(stripAngle);
 
       // Subtle drop shadow on the paper strip
-      ctx.shadowColor = 'rgba(0,0,0,0.38)';
-      ctx.shadowBlur = 10;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 3;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 4;
 
       ctx.drawImage(
         stripImage,
@@ -385,17 +444,17 @@ window.Printer = (function () {
   }
 
   /* ---------- Inline preview & developing animations ---------- */
-  function showInline(stripCanvas) {
-    stripImage = stripCanvas;
-    baseStripImage = stripCanvas;
+  function showInline(stripCanvas, captures, state) {
+    if (stripCanvas) {
+      stripImage = stripCanvas;
+      baseStripImage = stripCanvas;
+    }
+    if (captures) currentCaptures = captures;
+    if (state) currentState = state;
+    hasDeveloped = false;
     
     const card = preview();
     if (!card) return;
-    
-    const insideScene = document.getElementById('sceneInside');
-    if (insideScene) {
-      insideScene.classList.add('is-preview');
-    }
     
     const overlay = document.getElementById('previewOverlay');
     if (overlay) overlay.hidden = false;
@@ -405,13 +464,16 @@ window.Printer = (function () {
     // Reset inputs
     if (nameInput()) nameInput().value = '';
     if (dateInput()) {
-      // Set default date input value to today's date in local timezone
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, '0');
       const dd = String(today.getDate()).padStart(2, '0');
       dateInput().value = `${yyyy}-${mm}-${dd}`;
     }
+    
+    const filterEl = document.getElementById('filterSelect');
+    if (filterEl) filterEl.value = 'vintage';
+
     downloadBtn().disabled = true;
     downloadBtn().classList.remove('is-ready');
     document.getElementById('newPhotoBtn').classList.remove('is-ready');
@@ -430,16 +492,11 @@ window.Printer = (function () {
     const overlay = document.getElementById('previewOverlay');
     if (overlay) overlay.hidden = true;
     
-    const insideScene = document.getElementById('sceneInside');
-    if (insideScene) {
-      insideScene.classList.remove('is-preview');
-    }
-    
     stripImage = null;
     baseStripImage = null;
   }
 
-  function _drawDevelopingPolaroid() {
+  function _drawDevelopingPolaroid(instant = false) {
     const canvas = previewCanvas();
     const card = preview();
     if (!canvas || !stripImage || !card) return;
@@ -467,10 +524,26 @@ window.Printer = (function () {
       canvas.dataset.hasZoomListener = 'true';
     }
     
+    if (instant || hasDeveloped) {
+      ctx.clearRect(0, 0, displayWidth, displayHeight);
+      ctx.fillStyle = '#f8f1e5';
+      ctx.fillRect(0, 0, displayWidth, displayHeight);
+      ctx.strokeStyle = 'rgba(40,20,5,0.15)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, 0, displayWidth, displayHeight);
+      ctx.drawImage(stripImage, 0, 0, displayWidth, displayHeight);
+      
+      downloadBtn().disabled = false;
+      downloadBtn().classList.add('is-ready');
+      document.getElementById('newPhotoBtn').classList.add('is-ready');
+      return;
+    }
+    
     let start = null;
     const duration = 1800; // 1.8 seconds developing time
     
     function drawStep(timestamp) {
+      if (hasDeveloped) return; // abort fade-in if instant redraw overrides it
       if (!start) start = timestamp;
       const elapsed = timestamp - start;
       const progress = Math.min(1, elapsed / duration);
@@ -499,6 +572,7 @@ window.Printer = (function () {
       if (progress < 1) {
         requestAnimationFrame(drawStep);
       } else {
+        hasDeveloped = true;
         downloadBtn().disabled = false;
         downloadBtn().classList.add('is-ready');
         document.getElementById('newPhotoBtn').classList.add('is-ready');
@@ -523,12 +597,95 @@ window.Printer = (function () {
     });
   }
 
+  /* ---------- Emerge from physical slot on the booth body ---------- */
+  function emergeFromSlot(slotEl, stripCanvas, captures, state) {
+    return new Promise(resolve => {
+      if (!slotEl || !stripCanvas) { resolve(); return; }
+
+      // Store for showInline later
+      stripImage      = stripCanvas;
+      baseStripImage  = stripCanvas;
+      currentCaptures = captures;
+      currentState    = state;
+
+      // Find the dark mouth opening inside the slot
+      const mouthEl = slotEl.querySelector('.printer-slot__mouth') || slotEl;
+      const mouthRect = mouthEl.getBoundingClientRect();
+
+      // Strip width = exact mouth width
+      const stripW = Math.round(mouthRect.width);
+      // Natural aspect ratio of the strip canvas
+      const aspect  = stripCanvas.height / stripCanvas.width;
+      const stripH  = Math.round(stripW * aspect);
+
+      // ── Outer wrapper: clips to what's below the mouth ──────────────
+      // Positioned right at the mouth bottom edge, full strip height but
+      // overflow:hidden — so content starting at translateY(-100%) is invisible.
+      const wrapper = document.createElement('div');
+      wrapper.id = 'emergingStripWrapper';
+      Object.assign(wrapper.style, {
+        position:     'fixed',
+        left:         `${mouthRect.left + (mouthRect.width - stripW) / 2}px`,
+        top:          `${mouthRect.bottom}px`,
+        width:        `${stripW}px`,
+        height:       `${stripH}px`,
+        overflow:     'hidden',
+        zIndex:       '200',
+        borderRadius: '0 0 3px 3px',
+        boxShadow:    '2px 8px 20px rgba(0,0,0,0.6)',
+        pointerEvents:'none',
+      });
+
+      // ── Inner strip image: starts fully above the wrapper (hidden) ──
+      // translateY(-100%) means the whole image sits above the wrapper's top
+      // which is hidden by overflow:hidden → looks like it's inside the machine
+      const img = new Image();
+      img.src = stripCanvas.toDataURL('image/png');
+      Object.assign(img.style, {
+        width:     '100%',
+        height:    `${stripH}px`,
+        display:   'block',
+        transform: 'translateY(-100%)',
+        // GPU-accelerated ease-out for smooth film feed
+        transition: 'transform 3.6s cubic-bezier(0.25, 0.1, 0.1, 1.0)',
+        willChange: 'transform',
+      });
+
+      wrapper.appendChild(img);
+      document.body.appendChild(wrapper);
+
+      // Slot shimmy while printing
+      slotEl.classList.add('is-printing');
+
+      // Trigger slide — must be after element is in DOM & painted
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          img.style.transform = 'translateY(0%)';
+        });
+      });
+
+      // Resolve when transition ends (3.6s + 200ms buffer)
+      const DURATION = 3800;
+      setTimeout(() => {
+        slotEl.classList.remove('is-printing');
+        resolve(wrapper);
+      }, DURATION);
+    });
+  }
+
+  /* Cleanup any emerging strip wrapper */
+  function removeEmergingStrip() {
+    const el = document.getElementById('emergingStripWrapper');
+    if (el) el.remove();
+  }
+
   /* ---------- Resize handler ---------- */
   window.addEventListener('resize', () => {
     if (stage() && !stage().hidden) _resizeCanvas();
   });
 
   applyDetailsBtn()?.addEventListener('click', _applyDetails);
+  document.getElementById('filterSelect')?.addEventListener('change', _rebuildAndShow);
 
   // Set default date input value to today's date in local timezone
   const dEl = dateInput();
@@ -547,6 +704,8 @@ window.Printer = (function () {
     hide,
     showInline,
     hideInline,
+    emergeFromSlot,
+    removeEmergingStrip,
     onDownload,
     onNewPhoto,
   };
