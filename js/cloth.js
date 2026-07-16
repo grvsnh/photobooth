@@ -56,9 +56,14 @@ window.Cloth = (function () {
     }
 
     _createCurtainTexture(text) {
+      // Compute the actual aspect ratio of the curtain sheet to keep borders and text from stretching
+      const sheetWidth = this.curtainWidth / 2 - 0.09;
+      const sheetHeight = this.curtainHeight;
+      const sheetAspect = Math.max(0.1, sheetWidth / sheetHeight);
+
       const canvas = document.createElement('canvas');
-      canvas.width = 512;
       canvas.height = 1024;
+      canvas.width = Math.round(canvas.height * sheetAspect);
       const ctx = canvas.getContext('2d');
 
       // 1. Draw rich velvet bloody red gradient background
@@ -88,7 +93,9 @@ window.Cloth = (function () {
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 4;
 
-      ctx.font = 'bold 240px "Yu Mincho", "Mincho", "SimSun", "STSong", serif';
+      // Scale character font size dynamically so it never overflows narrow borders
+      const fontSize = Math.min(240, Math.round(canvas.width * 0.70));
+      ctx.font = `bold ${fontSize}px "Yu Mincho", "Mincho", "SimSun", "STSong", serif`;
       ctx.fillStyle = '#ffffff'; // white
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -96,6 +103,18 @@ window.Cloth = (function () {
 
       const texture = new THREE.CanvasTexture(canvas);
       return texture;
+    }
+
+    updateTextures() {
+      if (this.leftTexture) this.leftTexture.dispose();
+      this.leftTexture = this._createCurtainTexture('美');
+      this.leftMaterial.map = this.leftTexture;
+      this.leftMaterial.needsUpdate = true;
+
+      if (this.rightTexture) this.rightTexture.dispose();
+      this.rightTexture = this._createCurtainTexture('華');
+      this.rightMaterial.map = this.rightTexture;
+      this.rightMaterial.needsUpdate = true;
     }
 
     /* Set up local WebGL Three.js context inside the canvas */
@@ -128,37 +147,26 @@ window.Cloth = (function () {
       fillLight.position.set(3, -2, 2.5);
       this.scene.add(fillLight);
 
-      // 5. Materials & Textures (embroidered gold text on velvet)
-      this.leftTexture = this._createCurtainTexture('美');
+      // 5. Materials (textures initialized in resize)
       this.leftMaterial = new THREE.MeshStandardMaterial({
-        map: this.leftTexture,
         roughness: 0.82,
         metalness: 0.05,
         side: THREE.DoubleSide,
         shadowSide: THREE.DoubleSide
       });
 
-      this.rightTexture = this._createCurtainTexture('華');
       this.rightMaterial = new THREE.MeshStandardMaterial({
-        map: this.rightTexture,
         roughness: 0.82,
         metalness: 0.05,
         side: THREE.DoubleSide,
         shadowSide: THREE.DoubleSide
       });
 
-      // 6. Geometries & Meshes (split left & right)
-      const cols = this.opts.cols;
-      const rows = this.opts.rows;
-
-      // Left curtain
-      this.leftGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, cols - 1, rows - 1);
-      this.leftMesh = new THREE.Mesh(this.leftGeometry, this.leftMaterial);
+      // 6. Meshes (geometries initialized in resize)
+      this.leftMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.leftMaterial);
       this.scene.add(this.leftMesh);
 
-      // Right curtain
-      this.rightGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, cols - 1, rows - 1);
-      this.rightMesh = new THREE.Mesh(this.rightGeometry, this.rightMaterial);
+      this.rightMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.rightMaterial);
       this.scene.add(this.rightMesh);
 
       // 7. Curtain rod/bar (metal cylinder)
@@ -175,6 +183,7 @@ window.Cloth = (function () {
       this.scene.add(this.barMesh);
 
       // 8. Curtain rings (brass metal toruses, split left & right)
+      const cols = this.opts.cols;
       this.leftRings = [];
       this.rightRings = [];
       this.ringGeom = new THREE.TorusGeometry(0.065, 0.011, 8, 16);
@@ -375,6 +384,18 @@ window.Cloth = (function () {
       const rect = this.canvas.getBoundingClientRect();
       const aspect = rect.width / rect.height;
       this.curtainWidth = 4.84 * aspect * 0.93; // Shrunk to leave gaps on borders
+
+      // Rescale geometries dynamically to match actual aspect width
+      if (this.leftGeometry) this.leftGeometry.dispose();
+      this.leftGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, this.opts.cols - 1, this.opts.rows - 1);
+      this.leftMesh.geometry = this.leftGeometry;
+
+      if (this.rightGeometry) this.rightGeometry.dispose();
+      this.rightGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, this.opts.cols - 1, this.opts.rows - 1);
+      this.rightMesh.geometry = this.rightGeometry;
+
+      // Recreate textures at the new aspect ratio to prevent border/text squashing
+      this.updateTextures();
 
       // Rescale the bar
       if (this.barMesh) {
