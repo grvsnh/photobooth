@@ -637,11 +637,9 @@ body::before {
   }
   .outside__bg { opacity: .24; }
   .booth-poster {
-    width: clamp(24px, 4.5vw, 42px) !important;
-    height: clamp(36px, 6.8vw, 64px) !important;
+    width: clamp(52px, 10vw, 84px) !important;
+    height: clamp(74px, 14.5vw, 120px) !important;
   }
-  .booth__column--left .booth-poster:nth-child(n+5) { display: none !important; }
-  .booth__column--right .booth-poster:nth-child(n+5) { display: none !important; }
   .inside__stool { width: 150px; height: 130px; bottom: 11%; }
   .viewfinder { width: 84vw !important; }
   .strip-preview { width: min(400px, 92vw); padding: 14px 12px; }
@@ -808,7 +806,7 @@ body::before {
   box-shadow: 1px 1px 0 #f8f1e5 !important;
 }
 
-}
+
 
 /* --- Anime twilight gradients for outside walls & floors --- */
 .outside__wall {

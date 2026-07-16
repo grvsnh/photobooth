@@ -565,4 +565,31 @@
   .neon__backplate { width: 110px; height: 24px; }
   .ready-indicator__label { font-size: 0.5rem; }
   .enter-btn__label { font-size: 0.7rem; }
+  .booth__btn-randomize { font-size: 0.55rem; padding: 4px 8px; margin-top: 0; }
+}
+
+.booth__btn-randomize {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 6px 14px;
+  font-family: var(--font-display), sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--ink);
+  background: #e8c55e; /* retro gold */
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  box-shadow: 0 3px 0 var(--ink), 0 4px 6px rgba(0,0,0,0.15);
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  z-index: 5;
+  text-transform: uppercase;
+}
+.booth__btn-randomize:hover {
+  background: #f0d276;
+}
+.booth__btn-randomize:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink), 0 2px 3px rgba(0,0,0,0.15);
 }

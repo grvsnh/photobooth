@@ -241,23 +241,152 @@
 
   function initPostersDraggable() {
     const columns = document.querySelectorAll('.booth__column');
+    
+    // Scatters and handles visibility of posters randomly and responsively
+    function randomizePosters() {
+      columns.forEach(column => {
+        const posters = Array.from(column.querySelectorAll('.booth-poster'));
+        const n = posters.length;
+        if (n === 0) return;
+
+        const panel = column.querySelector('.booth__panel--riveted') || column;
+
+        // Temporarily display posters to get their actual rendered sizes in pixels
+        posters.forEach(p => p.style.display = 'block');
+
+        // Measure first visible poster size
+        const firstPoster = posters[0];
+        const posterW = firstPoster.offsetWidth || 56;
+        const posterH = firstPoster.offsetHeight || 80;
+        const panelW = panel.offsetWidth || 200;
+        const panelH = panel.offsetHeight || 450;
+
+        // Convert to percentages relative to panel dimensions
+        const wPct = (posterW / panelW) * 100;
+        const hPct = (posterH / panelH) * 100;
+        const pad = 2; // padding percentage for visual separation
+
+        const shuffled = [...posters];
+        const placed = []; // Bounding boxes of already placed posters: {l, r, t, b}
+
+        // Try up to 8 full layout attempts to satisfy the minimum 3 posters without overlaps
+        let attemptsCount = 0;
+        let visibleCount = 0;
+
+        while (attemptsCount < 8) {
+          placed.length = 0;
+          visibleCount = 0;
+
+          // Shuffle the posters array randomly each attempt
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+
+          shuffled.forEach((poster) => {
+            let success = false;
+            let leftPercent = 0;
+            let topPercent = 0;
+            let rotateDeg = 0;
+
+            const maxAttempts = 80;
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              const maxL = Math.max(5, 95 - wPct);
+              const maxT = Math.max(5, 95 - hPct);
+              leftPercent = 4 + Math.random() * (maxL - 4);
+              topPercent = 4 + Math.random() * (maxT - 4);
+              rotateDeg = Math.round((Math.random() - 0.5) * 36);
+
+              // Bounding box with padding
+              const l1 = leftPercent - pad;
+              const r1 = leftPercent + wPct + pad;
+              const t1 = topPercent - pad;
+              const b1 = topPercent + hPct + pad;
+
+              // Check overlap with any already placed posters
+              let overlap = false;
+              for (const other of placed) {
+                if (l1 < other.r && r1 > other.l && t1 < other.b && b1 > other.t) {
+                  overlap = true;
+                  break;
+                }
+              }
+
+              if (!overlap) {
+                placed.push({ l: l1, r: r1, t: t1, b: b1 });
+                poster._tempPos = { leftPercent, topPercent, rotateDeg };
+                success = true;
+                visibleCount++;
+                break;
+              }
+            }
+
+            if (!success) {
+              poster._tempPos = null;
+            }
+          });
+
+          // If we successfully placed at least 3 posters, we are good!
+          if (visibleCount >= 3) {
+            break;
+          }
+          attemptsCount++;
+        }
+
+        // Fallback: If after all attempts we still placed less than 3, force place the first 3 (allowing overlaps)
+        if (visibleCount < 3) {
+          for (let i = 0; i < Math.min(3, shuffled.length); i++) {
+            const poster = shuffled[i];
+            if (!poster._tempPos) {
+              const maxL = Math.max(5, 95 - wPct);
+              const maxT = Math.max(5, 95 - hPct);
+              const leftPercent = 4 + Math.random() * (maxL - 4);
+              const topPercent = 4 + Math.random() * (maxT - 4);
+              const rotateDeg = Math.round((Math.random() - 0.5) * 36);
+              poster._tempPos = { leftPercent, topPercent, rotateDeg };
+            }
+          }
+        }
+
+        // Apply final positions and display flags
+        shuffled.forEach((poster) => {
+          poster._dragOffsetX = 0;
+          poster._dragOffsetY = 0;
+
+          if (poster._tempPos) {
+            poster.style.display = 'block';
+            poster.style.top = `${poster._tempPos.leftPercent}%`; // note: standard style mapping
+            poster.style.top = `${poster._tempPos.topPercent}%`;
+            poster.style.left = `${poster._tempPos.leftPercent}%`;
+            poster.dataset.rotation = `rotate(${poster._tempPos.rotateDeg}deg)`;
+            poster.style.transform = `translate3d(0, 0, 0) rotate(${poster._tempPos.rotateDeg}deg)`;
+          } else {
+            poster.style.display = 'none';
+          }
+        });
+      });
+    }
+
+    // Run once on initialization
+    randomizePosters();
+
+    // Bind event listener to the randomize button below the vent
+    const randomizeBtn = document.getElementById('randomizePostersBtn');
+    if (randomizeBtn) {
+      randomizeBtn.addEventListener('click', () => {
+        randomizePosters();
+      });
+    }
+
+    // Handle responsiveness on window resize
+    window.addEventListener('resize', () => {
+      randomizePosters();
+    });
+
+    // Make posters draggable
     columns.forEach(column => {
       const posters = column.querySelectorAll('.booth-poster');
-      const n = posters.length;
-      if (n === 0) return;
-
-      posters.forEach((poster, idx) => {
-        // Scatter along the column vertical panel height (centered inside column bounds)
-        const spacingFactor = 92 / n;
-        const topPercent = 2.5 + idx * spacingFactor + (Math.random() - 0.5) * 2;
-        const leftPercent = 3 + Math.random() * 11;
-        const rotateDeg = Math.round((Math.random() - 0.5) * 36);
-
-        poster.style.top = `${topPercent}%`;
-        poster.style.left = `${leftPercent}%`;
-        poster.dataset.rotation = `rotate(${rotateDeg}deg)`;
-        poster.style.transform = `translate3d(0, 0, 0) rotate(${rotateDeg}deg)`;
-
+      posters.forEach((poster) => {
         // Enable pointer events on the poster
         poster.style.pointerEvents = 'auto';
         poster.style.cursor = 'grab';
@@ -265,35 +394,39 @@
         let isDragging = false;
         let startX = 0;
         let startY = 0;
-        let offsetX = 0;
-        let offsetY = 0;
-        
+
         poster.addEventListener('pointerdown', (ev) => {
           if (ev.button && ev.button !== 0) return;
           isDragging = true;
           poster.style.cursor = 'grabbing';
           poster.style.zIndex = '1000'; // bring to front
-          
-          // Capture pointer
+
           poster.setPointerCapture(ev.pointerId);
 
-          startX = ev.clientX - offsetX;
-          startY = ev.clientY - offsetY;
+          const ox = poster._dragOffsetX || 0;
+          const oy = poster._dragOffsetY || 0;
+
+          startX = ev.clientX - ox;
+          startY = ev.clientY - oy;
           ev.stopPropagation();
         });
 
         poster.addEventListener('pointermove', (ev) => {
           if (!isDragging) return;
 
+          const ox = poster._dragOffsetX || 0;
+          const oy = poster._dragOffsetY || 0;
+
           let x = ev.clientX - startX;
           let y = ev.clientY - startY;
 
-          // Constraint within the column panel!
-          const containerRect = column.getBoundingClientRect();
+          // Constraint strictly within the riveted panel container!
+          const panel = column.querySelector('.booth__panel--riveted') || column;
+          const containerRect = panel.getBoundingClientRect();
           const posterRect = poster.getBoundingClientRect();
 
-          const currentLeft = posterRect.left - offsetX;
-          const currentTop = posterRect.top - offsetY;
+          const currentLeft = posterRect.left - ox;
+          const currentTop = posterRect.top - oy;
 
           const minX = containerRect.left - currentLeft;
           const maxX = containerRect.right - currentLeft - posterRect.width;
@@ -301,11 +434,11 @@
           const maxY = containerRect.bottom - currentTop - posterRect.height;
 
           // Clamp offsets
-          offsetX = Math.max(minX, Math.min(maxX, x));
-          offsetY = Math.max(minY, Math.min(maxY, y));
+          poster._dragOffsetX = Math.max(minX, Math.min(maxX, x));
+          poster._dragOffsetY = Math.max(minY, Math.min(maxY, y));
 
           const rot = poster.dataset.rotation || 'rotate(0deg)';
-          poster.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0) ${rot}`;
+          poster.style.transform = `translate3d(${poster._dragOffsetX}px, ${poster._dragOffsetY}px, 0) ${rot}`;
           ev.stopPropagation();
         });
 
