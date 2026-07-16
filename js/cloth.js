@@ -1,7 +1,7 @@
 /* ============================================================
    cloth.js
-   Three.js-driven custom GSAP-animated curtain simulation.
-   Renders crimson velvet cloth with brass rings sliding on a metallic rod.
+   Three.js-driven custom GSAP-animated double curtain simulation.
+   Renders split left & right crimson velvet curtains sliding on a metallic rod.
    ============================================================ */
 
 window.Cloth = (function () {
@@ -13,7 +13,7 @@ window.Cloth = (function () {
       this.time = 0;
 
       this.opts = Object.assign({
-        cols: 30,
+        cols: 16,
         rows: 30,
         baseColor: '#5a1226',
         deepColor: '#2a0712',
@@ -28,26 +28,74 @@ window.Cloth = (function () {
       this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
       // 3D Curtain geometry size constants
-      this.curtainHeight = 4.2; // Shrunk more to leave a larger gap at the bottom
+      this.curtainHeight = 2.75; // 2.5/4 height curtain
+      this.topY = 2.20; // Top edge of the curtain at the rod level
       const aspect = canvas.clientWidth / canvas.clientHeight;
-      this.curtainWidth = this.curtainHeight * 1.10 * aspect * 0.93; // Shrunk more to leave a larger gap on the sides
+      this.curtainWidth = 4.84 * aspect * 0.93; // Spans full doorway width with side margins
 
       // Scale helper to map screen pixel offsets to 3D world units
       this.pixelTo3D = this.curtainWidth / canvas.clientWidth;
       this.closeDX3D = this.opts.closeDX * this.pixelTo3D;
 
-      // GSAP-driven state variables
+      // GSAP-driven state variables for dual curtains
       this.state = {
-        bunch: 0,           // 0 = closed (flat), 1 = open (bunched left)
-        dragX: 0,           // current 3D drag coordinates X
-        dragY: 0,           // current 3D drag coordinates Y
+        bunchLeft: 0,        // 0 = closed (covers left half), 1 = open (bunched far left)
+        bunchRight: 0,       // 0 = closed (covers right half), 1 = open (bunched far right)
+        
+        // Pointer drag states
         dragIntensity: 0,   // current drag influence factor (0 to 1)
+        dragSide: null,      // 'left' or 'right' depending on which curtain is grabbed
         dragCol: 0,         // column that is grabbed
         dragRow: 0,         // row that is grabbed
+        dragX: 0,           // current 3D drag coordinates X
+        dragY: 0,           // current 3D drag coordinates Y
       };
 
       this._initThree();
       this.resize();
+    }
+
+    _createCurtainTexture(text) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // 1. Draw rich velvet bloody red gradient background
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      bgGrad.addColorStop(0, '#cc0000');   // bright blood red
+      bgGrad.addColorStop(0.5, '#800000'); // deep blood red
+      bgGrad.addColorStop(1, '#3b0000');   // dark blood red
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // 2. Draw traditional black double borders with subtle white outline
+      ctx.shadowColor = 'rgba(255, 255, 255, 0.12)';
+      ctx.shadowBlur = 2;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+
+      ctx.strokeStyle = '#0f0f0f'; // black
+      ctx.lineWidth = 14;
+      ctx.strokeRect(25, 25, canvas.width - 50, canvas.height - 50);
+
+      ctx.lineWidth = 3;
+      ctx.strokeRect(44, 44, canvas.width - 88, canvas.height - 88);
+
+      // 3. Draw calligraphic white character centered in the middle of the sheet
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)'; // dark shadow for white text depth
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 4;
+
+      ctx.font = 'bold 240px "Yu Mincho", "Mincho", "SimSun", "STSong", serif';
+      ctx.fillStyle = '#ffffff'; // white
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      return texture;
     }
 
     /* Set up local WebGL Three.js context inside the canvas */
@@ -80,24 +128,40 @@ window.Cloth = (function () {
       fillLight.position.set(3, -2, 2.5);
       this.scene.add(fillLight);
 
-      // 5. Geometry & Material
-      const cols = this.opts.cols;
-      const rows = this.opts.rows;
-      this.geometry = new THREE.PlaneGeometry(this.curtainWidth, this.curtainHeight, cols - 1, rows - 1);
-
-      // Rich crimson velvet material shading
-      this.material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(this.opts.lightColor),
+      // 5. Materials & Textures (embroidered gold text on velvet)
+      this.leftTexture = this._createCurtainTexture('美');
+      this.leftMaterial = new THREE.MeshStandardMaterial({
+        map: this.leftTexture,
         roughness: 0.82,
         metalness: 0.05,
         side: THREE.DoubleSide,
         shadowSide: THREE.DoubleSide
       });
 
-      this.mesh = new THREE.Mesh(this.geometry, this.material);
-      this.scene.add(this.mesh);
+      this.rightTexture = this._createCurtainTexture('華');
+      this.rightMaterial = new THREE.MeshStandardMaterial({
+        map: this.rightTexture,
+        roughness: 0.82,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+        shadowSide: THREE.DoubleSide
+      });
 
-      // 6. Curtain rod/bar (metal cylinder, created with unit length 1.0 and scaled dynamically)
+      // 6. Geometries & Meshes (split left & right)
+      const cols = this.opts.cols;
+      const rows = this.opts.rows;
+
+      // Left curtain
+      this.leftGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, cols - 1, rows - 1);
+      this.leftMesh = new THREE.Mesh(this.leftGeometry, this.leftMaterial);
+      this.scene.add(this.leftMesh);
+
+      // Right curtain
+      this.rightGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, cols - 1, rows - 1);
+      this.rightMesh = new THREE.Mesh(this.rightGeometry, this.rightMaterial);
+      this.scene.add(this.rightMesh);
+
+      // 7. Curtain rod/bar (metal cylinder)
       this.barGeom = new THREE.CylinderGeometry(0.035, 0.035, 1.0, 16);
       this.barGeom.rotateZ(Math.PI / 2);
       this.barMat = new THREE.MeshStandardMaterial({
@@ -107,11 +171,12 @@ window.Cloth = (function () {
       });
       this.barMesh = new THREE.Mesh(this.barGeom, this.barMat);
       this.barMesh.scale.set(this.curtainWidth * 1.12, 1, 1);
-      this.barMesh.position.set(0, this.curtainHeight / 2 + 0.06, 0);
+      this.barMesh.position.set(0, this.topY + 0.06, 0);
       this.scene.add(this.barMesh);
 
-      // 7. Curtain rings (brass metal toruses)
-      this.rings = [];
+      // 8. Curtain rings (brass metal toruses, split left & right)
+      this.leftRings = [];
+      this.rightRings = [];
       this.ringGeom = new THREE.TorusGeometry(0.065, 0.011, 8, 16);
       this.ringGeom.rotateY(Math.PI / 2); // Align ring hole with horizontal rod axis (X axis)
       this.ringMat = new THREE.MeshStandardMaterial({
@@ -119,10 +184,19 @@ window.Cloth = (function () {
         roughness: 0.22,
         metalness: 0.88
       });
+
+      // Create rings for left curtain
       for (let x = 0; x < cols; x++) {
         const ringMesh = new THREE.Mesh(this.ringGeom, this.ringMat);
         this.scene.add(ringMesh);
-        this.rings.push(ringMesh);
+        this.leftRings.push(ringMesh);
+      }
+
+      // Create rings for right curtain
+      for (let x = 0; x < cols; x++) {
+        const ringMesh = new THREE.Mesh(this.ringGeom, this.ringMat);
+        this.scene.add(ringMesh);
+        this.rightRings.push(ringMesh);
       }
     }
 
@@ -131,7 +205,7 @@ window.Cloth = (function () {
       this.camera.aspect = aspect;
 
       // Frame the curtain height and shift camera up slightly so the rod and rings are visible at the top
-      const visibleHeight = this.curtainHeight * 1.10;
+      const visibleHeight = 4.84;
       this.camera.position.y = 0.065;
       this.camera.fov = 2 * Math.atan((visibleHeight / 2) / this.camera.position.z) * (180 / Math.PI);
       this.camera.updateProjectionMatrix();
@@ -145,8 +219,13 @@ window.Cloth = (function () {
       this.active = false;
       
       // Clean up WebGL resources
-      if (this.geometry) this.geometry.dispose();
-      if (this.material) this.material.dispose();
+      if (this.leftGeometry) this.leftGeometry.dispose();
+      if (this.rightGeometry) this.rightGeometry.dispose();
+      
+      if (this.leftTexture) this.leftTexture.dispose();
+      if (this.rightTexture) this.rightTexture.dispose();
+      if (this.leftMaterial) this.leftMaterial.dispose();
+      if (this.rightMaterial) this.rightMaterial.dispose();
       
       if (this.barGeom) this.barGeom.dispose();
       if (this.barMat) this.barMat.dispose();
@@ -158,29 +237,43 @@ window.Cloth = (function () {
 
     /* Sets anchor offset (DX) in canvas-local pixels during manual drag */
     setAnchorOffset(dx) {
-      const maxDragDistance = this.canvas.clientWidth * 0.78;
-      const targetBunch = Math.max(0, Math.min(1.0, -dx / maxDragDistance));
+      const maxDragDistance = this.canvas.clientWidth * 0.38; // drag 38% of screen to bunch fully
       
-      gsap.to(this.state, {
-        bunch: targetBunch,
-        duration: 0.2,
-        overwrite: "auto",
-        ease: "power1.out"
-      });
+      if (this.state.dragSide === 'left') {
+        const targetBunch = Math.max(0, Math.min(1.0, -dx / maxDragDistance));
+        gsap.to(this.state, {
+          bunchLeft: targetBunch,
+          duration: 0.2,
+          overwrite: "auto",
+          ease: "power1.out"
+        });
+      } else {
+        const targetBunch = Math.max(0, Math.min(1.0, dx / maxDragDistance));
+        gsap.to(this.state, {
+          bunchRight: targetBunch,
+          duration: 0.2,
+          overwrite: "auto",
+          ease: "power1.out"
+        });
+      }
     }
 
     /* Closes or opens the curtain */
     close(direction) {
       if (direction === 'in') {
+        // Bunch both left and right to reveal the camera
         gsap.to(this.state, {
-          bunch: 1.0,
+          bunchLeft: 1.0,
+          bunchRight: 1.0,
           duration: 1.6,
           overwrite: "auto",
           ease: "power2.inOut"
         });
       } else {
+        // Snap both back closed
         gsap.to(this.state, {
-          bunch: 0.0,
+          bunchLeft: 0.0,
+          bunchRight: 0.0,
           duration: 1.4,
           overwrite: "auto",
           ease: "elastic.out(1, 0.78)"
@@ -190,10 +283,12 @@ window.Cloth = (function () {
 
     reset() {
       gsap.killTweensOf(this.state);
-      this.state.bunch = 0;
+      this.state.bunchLeft = 0;
+      this.state.bunchRight = 0;
       this.state.dragIntensity = 0;
       this.state.dragX = 0;
       this.state.dragY = 0;
+      this.state.dragSide = null;
     }
 
     /* Pointer coordinates helper: maps canvas pixel coords to 3D world coords */
@@ -218,18 +313,28 @@ window.Cloth = (function () {
       const cols = this.opts.cols;
       const rows = this.opts.rows;
 
-      // Find the nearest row and column index based on 3D viewport mapping
-      const u = Math.max(0, Math.min(1, (pos.x - (-this.curtainWidth / 2)) / this.curtainWidth));
-      const v = Math.max(0, Math.min(1, (this.curtainHeight / 2 - pos.y) / this.curtainHeight));
+      // Determine which half is grabbed
+      const side = pos.x < 0 ? 'left' : 'right';
+      this.state.dragSide = side;
 
-      const col = Math.round(u * (cols - 1));
-      const row = Math.round(v * (rows - 1));
+      if (side === 'left') {
+        const u = Math.max(0, Math.min(1, (pos.x - (-this.curtainWidth / 2)) / (this.curtainWidth / 2)));
+        const v = Math.max(0, Math.min(1, (this.topY - pos.y) / this.curtainHeight));
+        const col = Math.round(u * (cols - 1));
+        const row = Math.round(v * (rows - 1));
+        if (row === 0) return null;
+        this.state.dragCol = col;
+        this.state.dragRow = row;
+      } else {
+        const u = Math.max(0, Math.min(1, pos.x / (this.curtainWidth / 2)));
+        const v = Math.max(0, Math.min(1, (this.topY - pos.y) / this.curtainHeight));
+        const col = Math.round(u * (cols - 1));
+        const row = Math.round(v * (rows - 1));
+        if (row === 0) return null;
+        this.state.dragCol = col;
+        this.state.dragRow = row;
+      }
 
-      // Do not allow grabbing the top rod row
-      if (row === 0) return null;
-
-      this.state.dragCol = col;
-      this.state.dragRow = row;
       this.state.dragX = pos.x;
       this.state.dragY = pos.y;
 
@@ -240,7 +345,7 @@ window.Cloth = (function () {
         ease: "power2.out"
       });
 
-      return { col, row }; // return truthy handle
+      return { side }; // return truthy handle
     }
 
     handlePointerMove(x, y) {
@@ -269,7 +374,7 @@ window.Cloth = (function () {
     resize() {
       const rect = this.canvas.getBoundingClientRect();
       const aspect = rect.width / rect.height;
-      this.curtainWidth = this.curtainHeight * 1.10 * aspect * 0.93; // Shrunk more to leave a larger gap on the sides
+      this.curtainWidth = 4.84 * aspect * 0.93; // Shrunk to leave gaps on borders
 
       // Rescale the bar
       if (this.barMesh) {
@@ -290,40 +395,49 @@ window.Cloth = (function () {
       const dtClamped = Math.min(0.04, dt);
       this.time += dtClamped;
 
-      // 1. Calculate curtain motion speed and direction for dynamic sways & curls
-      const prevBunchVal = this._prevBunch !== undefined ? this._prevBunch : this.state.bunch;
-      const bunchDir = this.state.bunch - prevBunchVal;
-      this._prevBunch = this.state.bunch;
+      // 1. Calculate Left motion speeds & directions
+      const prevBunchLeft = this._prevBunchLeft !== undefined ? this._prevBunchLeft : this.state.bunchLeft;
+      const leftBunchDir = this.state.bunchLeft - prevBunchLeft;
+      this._prevBunchLeft = this.state.bunchLeft;
 
-      const dragXDiff = this.state.dragX - (this._prevDragX !== undefined ? this._prevDragX : this.state.dragX);
-      this._prevDragX = this.state.dragX;
+      const leftDragXDiff = (this.state.dragSide === 'left') ? (this.state.dragX - (this._prevDragXLeft !== undefined ? this._prevDragXLeft : this.state.dragX)) : 0;
+      this._prevDragXLeft = this.state.dragX;
 
-      // Filter and scale motion speed to drive secondary animation intensity
-      const motionSpeed = Math.abs(bunchDir) * 15.0 + Math.abs(dragXDiff) * 4.0;
-      this.motionIntensity = (this.motionIntensity || 0) * 0.88 + Math.min(1.0, motionSpeed) * 0.12;
+      const leftMotionSpeed = Math.abs(leftBunchDir) * 15.0 + Math.abs(leftDragXDiff) * 4.0;
+      this.leftMotionIntensity = (this.leftMotionIntensity || 0) * 0.88 + Math.min(1.0, leftMotionSpeed) * 0.12;
+
+      // 2. Calculate Right motion speeds & directions
+      const prevBunchRight = this._prevBunchRight !== undefined ? this._prevBunchRight : this.state.bunchRight;
+      const rightBunchDir = this.state.bunchRight - prevBunchRight;
+      this._prevBunchRight = this.state.bunchRight;
+
+      const rightDragXDiff = (this.state.dragSide === 'right') ? (this.state.dragX - (this._prevDragXRight !== undefined ? this._prevDragXRight : this.state.dragX)) : 0;
+      this._prevDragXRight = this.state.dragX;
+
+      const rightMotionSpeed = Math.abs(rightBunchDir) * 15.0 + Math.abs(rightDragXDiff) * 4.0;
+      this.rightMotionIntensity = (this.rightMotionIntensity || 0) * 0.88 + Math.min(1.0, rightMotionSpeed) * 0.12;
 
       const cols = this.opts.cols;
       const rows = this.opts.rows;
       const pCount = cols * rows;
 
-      const posAttr = this.geometry.attributes.position;
-
-      // Update mesh geometry vertices dynamically
+      // ==================== LEFT CURTAIN VERTICES ====================
+      const leftPosAttr = this.leftGeometry.attributes.position;
       for (let i = 0; i < pCount; i++) {
         const c = i % cols;
         const r = Math.floor(i / cols);
         const u = c / (cols - 1);
         const v = r / (rows - 1);
 
-        // A. Spacing when closed vs bunched left, with a cosine curl factor to model accordion folding in X
-        let targetX = -this.curtainWidth / 2 + u * this.curtainWidth * (1.02 - this.state.bunch * 0.82) + Math.cos(u * 14.0) * 0.045 * (1.0 - this.state.bunch);
-        let targetY = this.curtainHeight / 2 - v * this.curtainHeight;
+        // A. Spacing when closed vs bunched left, with a cosine curl factor (scaled by v) to align perfectly with rings at the top (v=0) and a 0.09 gap from the center
+        let targetX = -this.curtainWidth / 2 + u * (this.curtainWidth / 2 - 0.09) * (1.025 - this.state.bunchLeft * 0.82) + Math.cos(u * 7.0) * 0.045 * (1.0 - this.state.bunchLeft) * v;
+        let targetY = this.topY - v * this.curtainHeight;
         
-        // B. Permanent drapery sinus folding: higher frequency waves (14.0) to add detailed vertical curves/folds
-        let targetZ = Math.sin(u * 14.0) * 0.18 * (1.0 - this.state.bunch * 0.85);
+        // B. Permanent drapery sinus folding: scaled by v so folds are 0 at the top (attaching perfectly to rings) and open up lower down
+        let targetZ = Math.sin(u * 7.0) * 0.18 * (1.0 - this.state.bunchLeft * 0.85) * v;
 
-        // C. Apply mouse drag distortion if active
-        if (this.state.dragIntensity > 0) {
+        // C. Apply mouse drag distortion if active on Left side
+        if (this.state.dragIntensity > 0 && this.state.dragSide === 'left') {
           const colDist = Math.abs(c - this.state.dragCol);
           const rowDist = Math.abs(r - this.state.dragRow);
 
@@ -333,42 +447,101 @@ window.Cloth = (function () {
           const weight = wCol * wRow * this.state.dragIntensity;
 
           targetX += (this.state.dragX - targetX) * weight;
-          targetY += (this.state.dragY - targetY) * weight;
-          targetZ += 0.38 * weight; // Pull forward for 3D depth
+          const anchorLock = Math.min(1.0, v * 5.0);
+          targetY += (this.state.dragY - targetY) * weight * anchorLock;
+          targetZ += 0.38 * weight * anchorLock;
         }
 
         // D. Calculate dynamic waves, dynamic wrinkles (curls), and inertial lag sways
-        const waveFactor = (1.0 - this.state.bunch) * (1.0 - this.state.dragIntensity * 0.5);
-        
-        // Normal ambient wind waves
+        const waveFactor = (1.0 - this.state.bunchLeft) * (1.0 - (this.state.dragSide === 'left' ? this.state.dragIntensity * 0.5 : 0));
         const windWaveX = Math.sin(v * 2.5 + this.time * 1.6) * 0.08 * v * waveFactor;
         const windWaveZ = (Math.sin(u * 4.0 + v * 2.5 + this.time * 2.0) * 0.26 + 
                        Math.cos(u * 2.0 - v * 1.5 + this.time * 3.5) * 0.07) * v * waveFactor;
 
         // Extra curls (high-frequency wrinkles) and sways that emerge organically when moving
-        const motionCurlZ = Math.sin(u * 12.0 + this.time * 8.0) * 0.06 * v * this.motionIntensity * waveFactor;
-        const motionSwayX = Math.sin(v * 3.5 - this.time * 6.0) * 0.10 * v * this.motionIntensity * waveFactor;
+        const motionCurlZ = Math.sin(u * 12.0 + this.time * 8.0) * 0.06 * v * this.leftMotionIntensity * waveFactor;
+        const motionSwayX = Math.sin(v * 3.5 - this.time * 6.0) * 0.10 * v * this.leftMotionIntensity * waveFactor;
 
         // Inertial lag (bottom of fabric trails behind the top slide action)
-        const lagX = bunchDir * 2.8 * v;
+        const lagX = leftBunchDir * 1.4 * v;
 
         const finalX = targetX + windWaveX + motionSwayX + lagX;
         const finalY = targetY;
         const finalZ = targetZ + windWaveZ + motionCurlZ;
 
-        posAttr.setXYZ(i, finalX, finalY, finalZ);
+        leftPosAttr.setXYZ(i, finalX, finalY, finalZ);
 
         // E. Sliding rings: Lock Y to rod level, lock Z to 0, ONLY slide sideways along X rod axis
         if (r === 0) {
-          const ring = this.rings[c];
+          const ring = this.leftRings[c];
           if (ring) {
-            ring.position.set(targetX, this.curtainHeight / 2 + 0.06, 0);
+            ring.position.set(targetX, this.topY + 0.06, 0);
           }
         }
       }
+      leftPosAttr.needsUpdate = true;
+      this.leftGeometry.computeVertexNormals();
 
-      posAttr.needsUpdate = true;
-      this.geometry.computeVertexNormals();
+      // ==================== RIGHT CURTAIN VERTICES ====================
+      const rightPosAttr = this.rightGeometry.attributes.position;
+      for (let i = 0; i < pCount; i++) {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const u = c / (cols - 1);
+        const v = r / (rows - 1);
+
+        // A. Spacing when closed vs bunched right, with a cosine curl factor (scaled by v) to align perfectly with rings at the top (v=0) and a 0.09 gap from the center
+        let targetX = (this.curtainWidth / 2) * (this.state.bunchRight * 0.82) + 0.09 * (1.0 - this.state.bunchRight) + u * (this.curtainWidth / 2 - 0.09) * (1.025 - this.state.bunchRight * 0.82) + Math.cos(u * 7.0) * 0.045 * (1.0 - this.state.bunchRight) * v;
+        let targetY = this.topY - v * this.curtainHeight;
+        
+        // B. Permanent drapery sinus folding: scaled by v so folds are 0 at the top (attaching perfectly to rings) and open up lower down
+        let targetZ = Math.sin(u * 7.0) * 0.18 * (1.0 - this.state.bunchRight * 0.85) * v;
+
+        // C. Apply mouse drag distortion if active on Right side
+        if (this.state.dragIntensity > 0 && this.state.dragSide === 'right') {
+          const colDist = Math.abs(c - this.state.dragCol);
+          const rowDist = Math.abs(r - this.state.dragRow);
+
+          // Gaussian bell curves to smooth falloff of fabric pulling
+          const wCol = Math.exp(-(colDist * colDist) / 12.0);
+          const wRow = Math.exp(-(rowDist * rowDist) / 16.0);
+          const weight = wCol * wRow * this.state.dragIntensity;
+
+          targetX += (this.state.dragX - targetX) * weight;
+          const anchorLock = Math.min(1.0, v * 5.0);
+          targetY += (this.state.dragY - targetY) * weight * anchorLock;
+          targetZ += 0.38 * weight * anchorLock;
+        }
+
+        // D. Calculate dynamic waves, dynamic wrinkles (curls), and inertial lag sways
+        const waveFactor = (1.0 - this.state.bunchRight) * (1.0 - (this.state.dragSide === 'right' ? this.state.dragIntensity * 0.5 : 0));
+        const windWaveX = Math.sin(v * 2.5 + this.time * 1.6) * 0.08 * v * waveFactor;
+        const windWaveZ = (Math.sin(u * 4.0 + v * 2.5 + this.time * 2.0) * 0.26 + 
+                       Math.cos(u * 2.0 - v * 1.5 + this.time * 3.5) * 0.07) * v * waveFactor;
+
+        // Extra curls (high-frequency wrinkles) and sways that emerge organically when moving
+        const motionCurlZ = Math.sin(u * 12.0 + this.time * 8.0) * 0.06 * v * this.rightMotionIntensity * waveFactor;
+        const motionSwayX = Math.sin(v * 3.5 - this.time * 6.0) * 0.10 * v * this.rightMotionIntensity * waveFactor;
+
+        // Inertial lag (bottom of fabric trails behind the top slide action)
+        const lagX = -rightBunchDir * 1.4 * v;
+
+        const finalX = targetX + windWaveX + motionSwayX + lagX;
+        const finalY = targetY;
+        const finalZ = targetZ + windWaveZ + motionCurlZ;
+
+        rightPosAttr.setXYZ(i, finalX, finalY, finalZ);
+
+        // E. Sliding rings: Lock Y to rod level, lock Z to 0, ONLY slide sideways along X rod axis
+        if (r === 0) {
+          const ring = this.rightRings[c];
+          if (ring) {
+            ring.position.set(targetX, this.topY + 0.06, 0);
+          }
+        }
+      }
+      rightPosAttr.needsUpdate = true;
+      this.rightGeometry.computeVertexNormals();
 
       this.renderer.render(this.scene, this.camera);
     }

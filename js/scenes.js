@@ -80,8 +80,12 @@ window.Scenes = (function () {
       const pos = UI.pointerPos(ev, canvas);
       const deltaX = pos.x - startX;
 
-      // If dragging to the left, slide the curtain anchors in real-time
-      if (deltaX < 0) {
+      // Slide the correct curtain depending on which side was grabbed
+      const dragSide = curtain.state.dragSide;
+      if (dragSide === 'left' && deltaX < 0) {
+        curtain.setAnchorOffset(deltaX);
+        pullDistance = Math.abs(deltaX);
+      } else if (dragSide === 'right' && deltaX > 0) {
         curtain.setAnchorOffset(deltaX);
         pullDistance = Math.abs(deltaX);
       } else {
@@ -99,8 +103,8 @@ window.Scenes = (function () {
       curtain.handlePointerUp();
       UI.enableSelection();
       
-      // Require pulling the curtain at least 78% of the width (fully left) to enter
-      if (pullDistance > canvas.clientWidth * 0.78) {
+      // Require pulling either curtain at least 35% of the total width to open camera
+      if (pullDistance > canvas.clientWidth * 0.35) {
         enterBooth();
       } else {
         curtain.close('out'); // Snap closed
