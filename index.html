@@ -79,29 +79,32 @@
 
           <!-- Left column (decorative) -->
           <div class="booth__column booth__column--left">
-            <div class="booth__panel booth__panel--riveted"></div>
+            <div class="booth__panel booth__panel--riveted">
+              <!-- Interactive draggable posters, bound inside this left column panel -->
+              <div class="booth__posters" aria-hidden="true">
+                <article class="booth-poster"><img src="assets/poster-01.png" alt="Poster 1"></article>
+                <article class="booth-poster"><img src="assets/poster-02.png" alt="Poster 2"></article>
+                <article class="booth-poster"><img src="assets/poster-03.png" alt="Poster 3"></article>
+                <article class="booth-poster"><img src="assets/poster-04.png" alt="Poster 4"></article>
+                <article class="booth-poster"><img src="assets/poster-05.png" alt="Poster 5"></article>
+                <article class="booth-poster"><img src="assets/poster-06.png" alt="Poster 6"></article>
+                <article class="booth-poster"><img src="assets/poster-07.png" alt="Poster 7"></article>
+                <article class="booth-poster"><img src="assets/poster-08.png" alt="Poster 8"></article>
+                <article class="booth-poster"><img src="assets/poster-09.png" alt="Poster 9"></article>
+                <article class="booth-poster"><img src="assets/poster-10.png" alt="Poster 10"></article>
+                <article class="booth-poster"><img src="assets/poster-11.png" alt="Poster 11"></article>
+                <article class="booth-poster"><img src="assets/poster-12.png" alt="Poster 12"></article>
+                <article class="booth-poster"><img src="assets/poster-13.png" alt="Poster 13"></article>
+                <article class="booth-poster"><img src="assets/poster-14.png" alt="Poster 14"></article>
+                <article class="booth-poster"><img src="assets/poster-15.png" alt="Poster 15"></article>
+              </div>
+            </div>
             <div class="booth__vent">
               <span></span><span></span><span></span><span></span>
               <span></span><span></span><span></span><span></span>
             </div>
-            <!-- Interactive draggable posters, bound inside this left column panel -->
-            <div class="booth__posters" aria-hidden="true">
-              <article class="booth-poster"><img src="assets/poster-01.png" alt="Poster 1"></article>
-              <article class="booth-poster"><img src="assets/poster-02.png" alt="Poster 2"></article>
-              <article class="booth-poster"><img src="assets/poster-03.png" alt="Poster 3"></article>
-              <article class="booth-poster"><img src="assets/poster-04.png" alt="Poster 4"></article>
-              <article class="booth-poster"><img src="assets/poster-05.png" alt="Poster 5"></article>
-              <article class="booth-poster"><img src="assets/poster-06.png" alt="Poster 6"></article>
-              <article class="booth-poster"><img src="assets/poster-07.png" alt="Poster 7"></article>
-              <article class="booth-poster"><img src="assets/poster-08.png" alt="Poster 8"></article>
-              <article class="booth-poster"><img src="assets/poster-09.png" alt="Poster 9"></article>
-              <article class="booth-poster"><img src="assets/poster-10.png" alt="Poster 10"></article>
-              <article class="booth-poster"><img src="assets/poster-11.png" alt="Poster 11"></article>
-              <article class="booth-poster"><img src="assets/poster-12.png" alt="Poster 12"></article>
-              <article class="booth-poster"><img src="assets/poster-13.png" alt="Poster 13"></article>
-              <article class="booth-poster"><img src="assets/poster-14.png" alt="Poster 14"></article>
-              <article class="booth-poster"><img src="assets/poster-15.png" alt="Poster 15"></article>
-            </div>
+            <!-- Randomize Posters Button -->
+            <button id="randomizePostersBtn" class="booth__btn-randomize" type="button" aria-label="Randomize posters">RANDOMIZE</button>
           </div>
 
           <!-- Center: curtain entrance -->
