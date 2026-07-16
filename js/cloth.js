@@ -1,349 +1,376 @@
 /* ============================================================
    cloth.js
-   Reusable Matter.js cloth simulation.
-   Used by the booth entrance curtains (and reusable for any
-   future velvet/fabric surface).
-
-   Public API:
-     const c = new Cloth(canvas, opts);
-     c.attach();        // add bodies/constraints to Physics world
-     c.detach();        // remove from world
-     c.draw();          // render to canvas (call each frame)
-     c.setAnchorOffset(px);   // slide top-row anchors horizontally
-     c.close(direction);      // animate toward 'in' (close) or 'out' (open)
-     c.handlePointerDown(x,y);
-     c.handlePointerMove(x,y);
-     c.handlePointerUp();
-     c.resize();
+   Three.js-driven custom GSAP-animated curtain simulation.
+   Renders crimson velvet cloth with brass rings sliding on a metallic rod.
    ============================================================ */
 
 window.Cloth = (function () {
 
-  const { M } = window.Physics;
-  const { Bodies, Body, Constraint } = M;
-
   class Cloth {
     constructor(canvas, opts) {
       this.canvas = canvas;
-      this.ctx = canvas.getContext('2d');
+      this.active = false;
+      this.time = 0;
+
       this.opts = Object.assign({
-        cols: 10,
-        rows: 16,
-        spacing: 14,
-        anchorY: 6,
-        offsetX: 0,           // where to start the cloth horizontally (canvas-local)
-        stiffness: 0.16,
-        damping: 0.09,        // frictionAir
-        mass: 0.025,
-        baseColor: '#5a1226', // velvet
-        deepColor:   '#2a0712',
-        lightColor:  '#8a1f3a',
+        cols: 30,
+        rows: 30,
+        baseColor: '#5a1226',
+        deepColor: '#2a0712',
+        lightColor: '#8a1f3a',
         highlightColor: 'rgba(255,210,180,0.10)',
-        anchorStiffness: 0.94,
+        stiffness: 0.98,
+        damping: 0.18,
+        mass: 0.006,
+        closeDX: -300,
       }, opts);
 
-      this.particles = [];
-      this.constraints = [];
-      this.anchors = [];          // anchor constraints (top row)
-      this.dragBody = null;
-      this._lastPointer = null;
-      this._lastPointerTime = 0;
       this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-      this._targetAnchorDX = 0;   // 0 = open, +N = slide right, -N = slide left
-      this._currentAnchorDX = 0;
+      // 3D Curtain geometry size constants
+      this.curtainHeight = 4.2; // Shrunk more to leave a larger gap at the bottom
+      const aspect = canvas.clientWidth / canvas.clientHeight;
+      this.curtainWidth = this.curtainHeight * 1.10 * aspect * 0.93; // Shrunk more to leave a larger gap on the sides
 
-      this._build();
+      // Scale helper to map screen pixel offsets to 3D world units
+      this.pixelTo3D = this.curtainWidth / canvas.clientWidth;
+      this.closeDX3D = this.opts.closeDX * this.pixelTo3D;
+
+      // GSAP-driven state variables
+      this.state = {
+        bunch: 0,           // 0 = closed (flat), 1 = open (bunched left)
+        dragX: 0,           // current 3D drag coordinates X
+        dragY: 0,           // current 3D drag coordinates Y
+        dragIntensity: 0,   // current drag influence factor (0 to 1)
+        dragCol: 0,         // column that is grabbed
+        dragRow: 0,         // row that is grabbed
+      };
+
+      this._initThree();
       this.resize();
     }
 
-    _build() {
-      const { cols, rows, spacing, anchorY, stiffness, damping, mass, offsetX, anchorStiffness } = this.opts;
+    /* Set up local WebGL Three.js context inside the canvas */
+    _initThree() {
+      // 1. Renderer
+      this.renderer = new THREE.WebGLRenderer({
+        canvas: this.canvas,
+        antialias: true,
+        alpha: true,
+        premultipliedAlpha: false
+      });
+      this.renderer.setPixelRatio(this.dpr);
+      this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
 
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols; x++) {
-          const px = offsetX + x * spacing;
-          const py = anchorY + y * spacing;
-          const body = Bodies.circle(px, py, Math.max(0.5, spacing * 0.28), {
-            frictionAir: damping,
-            friction: 0.01,
-            restitution: 0,
-            mass: mass,
-            density: 0.002,
-            isStatic: false,
-            label: 'cloth-particle',
-            collisionFilter: { group: -1, category: 0, mask: 0 } // cloth ignores collisions
-          });
-          body.clothInfo = { col: x, row: y, homeX: px, homeY: py };
-          this.particles.push(body);
-        }
-      }
+      // 2. Scene & Camera
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.PerspectiveCamera(40, this.canvas.clientWidth / this.canvas.clientHeight, 0.1, 100);
+      this.camera.position.set(0, 0, 6.0);
 
-      // Top-row anchors — pointB is in WORLD space and we animate it
-      for (let x = 0; x < cols; x++) {
-        const p = this.particles[x];
-        const anchor = Constraint.create({
-          bodyA: p,
-          pointA: { x: 0, y: 0 },
-          pointB: { x: p.position.x, y: p.position.y },
-          stiffness: anchorStiffness,
-          damping: 0.2,
-          length: 0,
-          render: { visible: false }
-        });
-        anchor._homeX = p.position.x;
-        anchor._homeY = p.position.y;
-        this.anchors.push(anchor);
-        this.constraints.push(anchor);
-      }
+      // 3. Ambient lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+      this.scene.add(ambientLight);
 
-      // Structural constraints: horizontal + vertical
-      const link = (a, b) => Constraint.create({
-        bodyA: a, bodyB: b,
-        stiffness: stiffness,
-        damping: 0.05,
-        length: spacing,
-        render: { visible: false }
+      // 4. Directional lighting (main keylight + warm side fill)
+      const mainLight = new THREE.DirectionalLight(0xffffff, 2.0);
+      mainLight.position.set(-2, 4, 3.5);
+      this.scene.add(mainLight);
+
+      const fillLight = new THREE.DirectionalLight(0x4a8eff, 0.9);
+      fillLight.position.set(3, -2, 2.5);
+      this.scene.add(fillLight);
+
+      // 5. Geometry & Material
+      const cols = this.opts.cols;
+      const rows = this.opts.rows;
+      this.geometry = new THREE.PlaneGeometry(this.curtainWidth, this.curtainHeight, cols - 1, rows - 1);
+
+      // Rich crimson velvet material shading
+      this.material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(this.opts.lightColor),
+        roughness: 0.82,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
+        shadowSide: THREE.DoubleSide
       });
 
-      for (let y = 0; y < rows; y++) {
-        for (let x = 0; x < cols - 1; x++) {
-          this.constraints.push(link(this.particles[y * cols + x], this.particles[y * cols + x + 1]));
-        }
-      }
-      for (let y = 0; y < rows - 1; y++) {
-        for (let x = 0; x < cols; x++) {
-          this.constraints.push(link(this.particles[y * cols + x], this.particles[(y + 1) * cols + x]));
-        }
-      }
+      this.mesh = new THREE.Mesh(this.geometry, this.material);
+      this.scene.add(this.mesh);
 
-      // Shear constraints (diagonals) — make the cloth less floppy
-      for (let y = 0; y < rows - 1; y++) {
-        for (let x = 0; x < cols - 1; x++) {
-          const a = this.particles[y * cols + x];
-          const b = this.particles[(y + 1) * cols + x + 1];
-          const c = Constraint.create({
-            bodyA: a, bodyB: b,
-            stiffness: stiffness * 0.4,
-            damping: 0.05,
-            length: Math.sqrt(2) * spacing,
-            render: { visible: false }
-          });
-          this.constraints.push(c);
-          const d = Constraint.create({
-            bodyA: this.particles[y * cols + x + 1],
-            bodyB: this.particles[(y + 1) * cols + x],
-            stiffness: stiffness * 0.32,
-            damping: 0.04,
-            length: Math.sqrt(2) * spacing,
-            render: { visible: false }
-          });
-          this.constraints.push(d);
-        }
+      // 6. Curtain rod/bar (metal cylinder, created with unit length 1.0 and scaled dynamically)
+      this.barGeom = new THREE.CylinderGeometry(0.035, 0.035, 1.0, 16);
+      this.barGeom.rotateZ(Math.PI / 2);
+      this.barMat = new THREE.MeshStandardMaterial({
+        color: 0xdcdcdc,
+        roughness: 0.12,
+        metalness: 0.88
+      });
+      this.barMesh = new THREE.Mesh(this.barGeom, this.barMat);
+      this.barMesh.scale.set(this.curtainWidth * 1.12, 1, 1);
+      this.barMesh.position.set(0, this.curtainHeight / 2 + 0.06, 0);
+      this.scene.add(this.barMesh);
+
+      // 7. Curtain rings (brass metal toruses)
+      this.rings = [];
+      this.ringGeom = new THREE.TorusGeometry(0.065, 0.011, 8, 16);
+      this.ringGeom.rotateY(Math.PI / 2); // Align ring hole with horizontal rod axis (X axis)
+      this.ringMat = new THREE.MeshStandardMaterial({
+        color: 0xd4af37, // brass/gold
+        roughness: 0.22,
+        metalness: 0.88
+      });
+      for (let x = 0; x < cols; x++) {
+        const ringMesh = new THREE.Mesh(this.ringGeom, this.ringMat);
+        this.scene.add(ringMesh);
+        this.rings.push(ringMesh);
       }
+    }
+
+    _updateCameraFraming() {
+      const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+      this.camera.aspect = aspect;
+
+      // Frame the curtain height and shift camera up slightly so the rod and rings are visible at the top
+      const visibleHeight = this.curtainHeight * 1.10;
+      this.camera.position.y = 0.065;
+      this.camera.fov = 2 * Math.atan((visibleHeight / 2) / this.camera.position.z) * (180 / Math.PI);
+      this.camera.updateProjectionMatrix();
     }
 
     attach() {
-      window.Physics.add(this.particles);
-      window.Physics.add(this.constraints);
+      this.active = true;
     }
 
     detach() {
-      window.Physics.remove(this.constraints);
-      window.Physics.remove(this.particles);
-      this.constraints = [];
-      this.particles = [];
-      this.anchors = [];
+      this.active = false;
+      
+      // Clean up WebGL resources
+      if (this.geometry) this.geometry.dispose();
+      if (this.material) this.material.dispose();
+      
+      if (this.barGeom) this.barGeom.dispose();
+      if (this.barMat) this.barMat.dispose();
+      if (this.ringGeom) this.ringGeom.dispose();
+      if (this.ringMat) this.ringMat.dispose();
+
+      if (this.renderer) this.renderer.dispose();
     }
 
-    /* Slide top-row anchors horizontally.
-       dx is in canvas-local px; positive = right. */
+    /* Sets anchor offset (DX) in canvas-local pixels during manual drag */
     setAnchorOffset(dx) {
-      this._targetAnchorDX = dx;
+      const maxDragDistance = this.canvas.clientWidth * 0.78;
+      const targetBunch = Math.max(0, Math.min(1.0, -dx / maxDragDistance));
+      
+      gsap.to(this.state, {
+        bunch: targetBunch,
+        duration: 0.2,
+        overwrite: "auto",
+        ease: "power1.out"
+      });
     }
 
-    /* direction: 'in' (close) or 'out' (open).
-       'in' slides anchors toward the centerline of the entrance. */
+    /* Closes or opens the curtain */
     close(direction) {
-      // Cloth on the LEFT side closes by sliding anchors RIGHT (+)
-      // Cloth on the RIGHT side closes by sliding anchors LEFT  (-)
-      // The caller passes the appropriate sign.
-      this._targetAnchorDX = direction === 'in' ? this.opts.closeDX : 0;
-    }
-
-    /* Update anchor positions every frame (called from a render loop).
-       Smoothly lerps currentDX toward targetDX. */
-    _updateAnchors(dt) {
-      const lerp = 1 - Math.pow(0.001, dt);
-      this._currentAnchorDX += (this._targetAnchorDX - this._currentAnchorDX) * lerp;
-      for (const a of this.anchors) {
-        a.pointB.x = a._homeX + this._currentAnchorDX;
+      if (direction === 'in') {
+        gsap.to(this.state, {
+          bunch: 1.0,
+          duration: 1.6,
+          overwrite: "auto",
+          ease: "power2.inOut"
+        });
+      } else {
+        gsap.to(this.state, {
+          bunch: 0.0,
+          duration: 1.4,
+          overwrite: "auto",
+          ease: "elastic.out(1, 0.78)"
+        });
       }
     }
 
-    /* Render the cloth as a shaded velvet surface.
-       NOTE: The caller is responsible for clearing the canvas
-       before drawing the first cloth (so multiple cloths can
-       share a canvas without erasing each other). */
-    draw() {
-      const ctx = this.ctx;
-      const { cols, rows, baseColor, deepColor, lightColor, highlightColor } = this.opts;
-
-      // Build vertex grid in canvas-local coords (no DPR scaling — we set transform)
-      const verts = [];
-      for (let y = 0; y < rows; y++) {
-        const row = [];
-        for (let x = 0; x < cols; x++) {
-          const p = this.particles[y * cols + x].position;
-          row.push({ x: p.x, y: p.y });
-        }
-        verts.push(row);
-      }
-
-      // Center column index for fold lighting
-      const halfCols = (cols - 1) / 2;
-
-      // Fill quads
-      for (let y = 0; y < rows - 1; y++) {
-        for (let x = 0; x < cols - 1; x++) {
-          const v00 = verts[y][x];
-          const v10 = verts[y][x + 1];
-          const v01 = verts[y + 1][x];
-          const v11 = verts[y + 1][x + 1];
-
-          // Average horizontal distance from "home" — folds pull particles
-          // away from their home column, creating shading variation.
-          const homeX00 = this.particles[y * cols + x].clothInfo.homeX;
-          const homeX11 = this.particles[(y + 1) * cols + (x + 1)].clothInfo.homeX;
-          const avgHome = (homeX00 + homeX11) / 2;
-          const avgX = (v00.x + v11.x) / 2;
-          const fold = (avgX - avgHome); // negative = compressed, positive = stretched
-
-          // Convert fold to a -1..1 shade factor (clamped)
-           const shade = Math.max(-1, Math.min(1, fold / 7.5));
-          // Compressed folds = darker; stretched = lighter
-          const t = shade * 0.5 + 0.5; // 0..1
-          const fill = this._mixColor(deepColor, lightColor, t);
-
-          ctx.beginPath();
-          ctx.moveTo(v00.x, v00.y);
-          ctx.lineTo(v10.x, v10.y);
-          ctx.lineTo(v11.x, v11.y);
-          ctx.lineTo(v01.x, v01.y);
-          ctx.closePath();
-          ctx.fillStyle = fill;
-          ctx.fill();
-          ctx.strokeStyle = fill;
-          ctx.lineWidth = 0.85; // bridge subpixel gaps
-          ctx.stroke();
-        }
-      }
-
-      // Vertical velvet sheen highlight (subtle stripe down the center)
-      const centerX = this.opts.offsetX + halfCols * this.opts.spacing;
-      const grad = ctx.createLinearGradient(centerX - 30, 0, centerX + 30, 0);
-      grad.addColorStop(0, 'rgba(0,0,0,0)');
-      grad.addColorStop(0.5, highlightColor);
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, this.canvas.width / this.dpr, this.canvas.height / this.dpr);
-
-      // Bottom hem — darker weighted strip
-      ctx.fillStyle = deepColor;
-      const lastRow = verts[rows - 1];
-      ctx.beginPath();
-      ctx.moveTo(lastRow[0].x, lastRow[0].y);
-      for (let x = 1; x < cols; x++) ctx.lineTo(lastRow[x].x, lastRow[x].y);
-      for (let x = cols - 1; x >= 0; x--) {
-        const v = verts[rows - 2][x];
-        ctx.lineTo(v.x, v.y - 2);
-      }
-      ctx.closePath();
-      ctx.fill();
+    reset() {
+      gsap.killTweensOf(this.state);
+      this.state.bunch = 0;
+      this.state.dragIntensity = 0;
+      this.state.dragX = 0;
+      this.state.dragY = 0;
     }
 
-    _mixColor(c1, c2, t) {
-      const a = this._hexToRgb(c1);
-      const b = this._hexToRgb(c2);
-      const r = Math.round(a.r + (b.r - a.r) * t);
-      const g = Math.round(a.g + (b.g - a.g) * t);
-      const bl = Math.round(a.b + (b.b - a.b) * t);
-      return `rgb(${r},${g},${bl})`;
+    /* Pointer coordinates helper: maps canvas pixel coords to 3D world coords */
+    _screenToWorld(x, y) {
+      const rect = this.canvas.getBoundingClientRect();
+      const normX = (x / rect.width) * 2 - 1;
+      const normY = -(y / rect.height) * 2 + 1;
+
+      // Project NDC back into world coordinates at Z=0
+      const vec = new THREE.Vector3(normX, normY, 0.5);
+      vec.unproject(this.camera);
+      const dir = vec.sub(this.camera.position).normalize();
+      const distance = -this.camera.position.z / dir.z;
+      const pos = this.camera.position.clone().add(dir.multiplyScalar(distance));
+      return pos;
     }
 
-    _hexToRgb(hex) {
-      if (hex.startsWith('rgb')) {
-        const m = hex.match(/\d+/g);
-        return { r: +m[0], g: +m[1], b: +m[2] };
-      }
-      const h = hex.replace('#', '');
-      return {
-        r: parseInt(h.slice(0, 2), 16),
-        g: parseInt(h.slice(2, 4), 16),
-        b: parseInt(h.slice(4, 6), 16)
-      };
-    }
-
-    /* Pointer interaction — drag nearest particle */
+    /* Pointer interaction handlers */
     handlePointerDown(x, y) {
-      let nearest = null;
-      let minDist = 44;
-      for (const p of this.particles) {
-        const dx = p.position.x - x;
-        const dy = p.position.y - y;
-        const d = Math.hypot(dx, dy);
-        if (d < minDist) { minDist = d; nearest = p; }
-      }
-      this.dragBody = nearest;
-      if (nearest) {
-        // Temporarily make the grabbed body static so it follows the pointer cleanly
-        Body.setStatic(nearest, true);
-        this._lastPointer = { x, y, vx: 0, vy: 0 };
-        this._lastPointerTime = performance.now();
-      }
-      return nearest;
+      const pos = this._screenToWorld(x, y);
+
+      const cols = this.opts.cols;
+      const rows = this.opts.rows;
+
+      // Find the nearest row and column index based on 3D viewport mapping
+      const u = Math.max(0, Math.min(1, (pos.x - (-this.curtainWidth / 2)) / this.curtainWidth));
+      const v = Math.max(0, Math.min(1, (this.curtainHeight / 2 - pos.y) / this.curtainHeight));
+
+      const col = Math.round(u * (cols - 1));
+      const row = Math.round(v * (rows - 1));
+
+      // Do not allow grabbing the top rod row
+      if (row === 0) return null;
+
+      this.state.dragCol = col;
+      this.state.dragRow = row;
+      this.state.dragX = pos.x;
+      this.state.dragY = pos.y;
+
+      gsap.to(this.state, {
+        dragIntensity: 1.0,
+        duration: 0.35,
+        overwrite: "auto",
+        ease: "power2.out"
+      });
+
+      return { col, row }; // return truthy handle
     }
 
     handlePointerMove(x, y) {
-      if (!this.dragBody) return;
-      const now = performance.now();
-      const elapsed = Math.max(16, now - this._lastPointerTime);
-      const previous = this._lastPointer || { x, y };
-      Body.setPosition(this.dragBody, { x, y });
-      Body.setVelocity(this.dragBody, { x: 0, y: 0 });
-      this._lastPointer = {
-        x, y,
-        vx: (x - previous.x) / elapsed * 1000,
-        vy: (y - previous.y) / elapsed * 1000
-      };
-      this._lastPointerTime = now;
+      const pos = this._screenToWorld(x, y);
+      
+      gsap.to(this.state, {
+        dragX: pos.x,
+        dragY: pos.y,
+        duration: 0.18,
+        overwrite: "auto",
+        ease: "power1.out"
+      });
     }
 
+    /* Pointer drag release */
     handlePointerUp() {
-      if (this.dragBody) {
-        Body.setStatic(this.dragBody, false);
-        if (this._lastPointer) {
-          Body.setVelocity(this.dragBody, {
-            x: Math.max(-18, Math.min(18, this._lastPointer.vx)),
-            y: Math.max(-18, Math.min(18, this._lastPointer.vy))
-          });
-        }
-        this.dragBody = null;
-      }
-      this._lastPointer = null;
+      gsap.to(this.state, {
+        dragIntensity: 0.0,
+        duration: 0.65,
+        overwrite: "auto",
+        ease: "power2.out"
+      });
     }
 
+    /* Handle sizing updates */
     resize() {
       const rect = this.canvas.getBoundingClientRect();
-      this.canvas.width = Math.max(1, Math.floor(rect.width * this.dpr));
-      this.canvas.height = Math.max(1, Math.floor(rect.height * this.dpr));
-      this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      const aspect = rect.width / rect.height;
+      this.curtainWidth = this.curtainHeight * 1.10 * aspect * 0.93; // Shrunk more to leave a larger gap on the sides
+
+      // Rescale the bar
+      if (this.barMesh) {
+        this.barMesh.scale.set(this.curtainWidth * 1.12, 1, 1);
+      }
+
+      this.pixelTo3D = this.curtainWidth / rect.width;
+      this.closeDX3D = this.opts.closeDX * this.pixelTo3D;
+
+      this.renderer.setSize(rect.width, rect.height, false);
+      this._updateCameraFraming();
     }
 
-    /* Called each frame from a centralized rAF loop */
+    /* Frame update tick */
     tick(dt) {
-      this._updateAnchors(dt);
-      this.draw();
+      if (!this.active) return;
+
+      const dtClamped = Math.min(0.04, dt);
+      this.time += dtClamped;
+
+      // 1. Calculate curtain motion speed and direction for dynamic sways & curls
+      const prevBunchVal = this._prevBunch !== undefined ? this._prevBunch : this.state.bunch;
+      const bunchDir = this.state.bunch - prevBunchVal;
+      this._prevBunch = this.state.bunch;
+
+      const dragXDiff = this.state.dragX - (this._prevDragX !== undefined ? this._prevDragX : this.state.dragX);
+      this._prevDragX = this.state.dragX;
+
+      // Filter and scale motion speed to drive secondary animation intensity
+      const motionSpeed = Math.abs(bunchDir) * 15.0 + Math.abs(dragXDiff) * 4.0;
+      this.motionIntensity = (this.motionIntensity || 0) * 0.88 + Math.min(1.0, motionSpeed) * 0.12;
+
+      const cols = this.opts.cols;
+      const rows = this.opts.rows;
+      const pCount = cols * rows;
+
+      const posAttr = this.geometry.attributes.position;
+
+      // Update mesh geometry vertices dynamically
+      for (let i = 0; i < pCount; i++) {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const u = c / (cols - 1);
+        const v = r / (rows - 1);
+
+        // A. Spacing when closed vs bunched left, with a cosine curl factor to model accordion folding in X
+        let targetX = -this.curtainWidth / 2 + u * this.curtainWidth * (1.02 - this.state.bunch * 0.82) + Math.cos(u * 14.0) * 0.045 * (1.0 - this.state.bunch);
+        let targetY = this.curtainHeight / 2 - v * this.curtainHeight;
+        
+        // B. Permanent drapery sinus folding: higher frequency waves (14.0) to add detailed vertical curves/folds
+        let targetZ = Math.sin(u * 14.0) * 0.18 * (1.0 - this.state.bunch * 0.85);
+
+        // C. Apply mouse drag distortion if active
+        if (this.state.dragIntensity > 0) {
+          const colDist = Math.abs(c - this.state.dragCol);
+          const rowDist = Math.abs(r - this.state.dragRow);
+
+          // Gaussian bell curves to smooth falloff of fabric pulling
+          const wCol = Math.exp(-(colDist * colDist) / 12.0);
+          const wRow = Math.exp(-(rowDist * rowDist) / 16.0);
+          const weight = wCol * wRow * this.state.dragIntensity;
+
+          targetX += (this.state.dragX - targetX) * weight;
+          targetY += (this.state.dragY - targetY) * weight;
+          targetZ += 0.38 * weight; // Pull forward for 3D depth
+        }
+
+        // D. Calculate dynamic waves, dynamic wrinkles (curls), and inertial lag sways
+        const waveFactor = (1.0 - this.state.bunch) * (1.0 - this.state.dragIntensity * 0.5);
+        
+        // Normal ambient wind waves
+        const windWaveX = Math.sin(v * 2.5 + this.time * 1.6) * 0.08 * v * waveFactor;
+        const windWaveZ = (Math.sin(u * 4.0 + v * 2.5 + this.time * 2.0) * 0.26 + 
+                       Math.cos(u * 2.0 - v * 1.5 + this.time * 3.5) * 0.07) * v * waveFactor;
+
+        // Extra curls (high-frequency wrinkles) and sways that emerge organically when moving
+        const motionCurlZ = Math.sin(u * 12.0 + this.time * 8.0) * 0.06 * v * this.motionIntensity * waveFactor;
+        const motionSwayX = Math.sin(v * 3.5 - this.time * 6.0) * 0.10 * v * this.motionIntensity * waveFactor;
+
+        // Inertial lag (bottom of fabric trails behind the top slide action)
+        const lagX = bunchDir * 2.8 * v;
+
+        const finalX = targetX + windWaveX + motionSwayX + lagX;
+        const finalY = targetY;
+        const finalZ = targetZ + windWaveZ + motionCurlZ;
+
+        posAttr.setXYZ(i, finalX, finalY, finalZ);
+
+        // E. Sliding rings: Lock Y to rod level, lock Z to 0, ONLY slide sideways along X rod axis
+        if (r === 0) {
+          const ring = this.rings[c];
+          if (ring) {
+            ring.position.set(targetX, this.curtainHeight / 2 + 0.06, 0);
+          }
+        }
+      }
+
+      posAttr.needsUpdate = true;
+      this.geometry.computeVertexNormals();
+
+      this.renderer.render(this.scene, this.camera);
     }
   }
 

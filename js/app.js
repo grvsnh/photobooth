@@ -179,6 +179,29 @@
     Printer.showInline(stripCanvas);
   }
 
+  async function _startPrinting() {
+    isBusy = true;
+
+    // 1. Build the high-quality photo strip from our captures
+    const stripCanvas = Strip.build(captures, {
+      paperStyle: state.paperStyle,
+      aspectRatio: state.aspectRatio,
+      timestamp: { enabled: false, format: 'DMY_HM', date: null },
+      maxWidth: state.downloadQuality === 'high' ? 1200 : 720,
+    });
+
+    // 2. Show the printer stage viewport
+    Printer.show(stripCanvas);
+
+    // 3. Emerge the strip from the slot (awaits animation complete)
+    await Printer.startPrinting();
+
+    // 4. Enable user dragging/pulling interaction to slide and tear the strip
+    Printer.enablePull(() => {
+      isBusy = false;
+    });
+  }
+
   function _bindPrinter() {
     Printer.onDownload((stripCanvas) => {
       if (!stripCanvas) return;
@@ -204,9 +227,14 @@
       document.getElementById('sceneInside')?.classList.remove('is-preview');
       Printer.hideInline();
       
-      isBusy = true;
-      if (await Camera.start()) {
-        isBusy = false;
+      if (Scenes.isOutside()) {
+        Printer.hide();
+        Scenes.resetCurtains(); // Reset curtain in original place without duplicate event bindings
+      } else {
+        isBusy = true;
+        if (await Camera.start()) {
+          isBusy = false;
+        }
       }
     });
   }
@@ -291,8 +319,8 @@
           } catch(e) {}
         };
 
-      poster.addEventListener('pointerup', stopDrag);
-      poster.addEventListener('pointercancel', stopDrag);
+        poster.addEventListener('pointerup', stopDrag);
+        poster.addEventListener('pointercancel', stopDrag);
       });
     });
   }

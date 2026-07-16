@@ -1,87 +1,49 @@
 /* ============================================================
    scenes.js
-   Scene orchestration:
-   - Builds and renders the outside scene's Matter.js bodies
-     (curtains, neon sign, hanging sign).
-   - Drives the Enter / Exit sequences (cameraRig motion,
-     curtain close/open, scene swap).
+   Orchestrates the outside and inside scenes, transitions, and sways.
+   Operates the Three.js curtains and the custom neon sign pendulum.
    ============================================================ */
 
 window.Scenes = (function () {
 
-  const { M } = window.Physics;
-  const { Bodies, Body, Constraint, Composite, Mouse, MouseConstraint } = M;
-
-  /* State */
-  let curtain = null;
-  let neonBody = null;
-  let neonConstraint = null;
-  let curtainMouseConstraint = null;
-
-  let curtainRenderLoop = null;
-  let outsideRenderLoop = null;
   let currentScene = 'outside';
   let isTransitioning = false;
+
+  let curtain = null;
+  let outsideRenderLoop = null;
+
+  // Custom pendulum variables for neon sign
+  let neonAngle = 0;
+  let neonAngularVelocity = 0;
+  const neonDamping = 0.985; // Air resistance damping
 
   /* ---------- Initialize the outside scene ---------- */
   function initOutside() {
     _buildCurtains();
     _buildNeonSign();
     _startOutsideRenderLoop();
-    Physics.start();
   }
 
-  /* ---------- Curtains ---------- */
   function _buildCurtains() {
     const canvas = document.getElementById('curtainCanvas');
     if (!canvas) return;
 
-    // Make sure canvas resolution matches its display size
     _resizeCurtainCanvas();
 
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-
-    // Single curtain optimized for mobile devices (fewer columns/particles total)
-    const cols = 22;
-    const rows = 48;
-    const spacing = Math.min(w / (cols * 1.05), (h * 0.94) / rows);
-
-    // Single curtain covering the entire frame width
+    // Create the Three.js cloth instance
     curtain = new Cloth(canvas, {
-      cols, rows, spacing,
-      anchorY: 4,
-      offsetX: 0,
-      baseColor: '#5a1226',
-      deepColor:   '#2a0712',
-      lightColor:  '#8a1f3a',
-      highlightColor: 'rgba(255,210,180,0.10)',
-      stiffness: 0.88,
-      damping: 0.18,
-      mass: 0.006,
-      closeDX: -(w * 0.96), // pull all the way left to reveal the entry
+      cols: 30,
+      rows: 30,
+      stiffness: 0.98,
+      closeDX: -300
     });
 
     curtain.attach();
-
-    const mouse = Mouse.create(canvas);
-    curtainMouseConstraint = MouseConstraint.create(Physics.engine, {
-      mouse,
-      constraint: {
-        stiffness: 0.94,
-        angularStiffness: 0,
-        render: { visible: false }
-      }
-    });
-    Composite.add(Physics.engine.world, curtainMouseConstraint);
-
-    // Pointer events for dragging the curtain
     _bindCurtainDrag(canvas);
 
-    // Resize handling
     window.addEventListener('resize', () => {
       _resizeCurtainCanvas();
-      curtain && curtain.resize();
+      if (curtain) curtain.resize();
     });
   }
 
@@ -89,23 +51,22 @@ window.Scenes = (function () {
     const canvas = document.getElementById('curtainCanvas');
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    canvas.width = rect.width;
+    canvas.height = rect.height;
   }
 
+  /* Bind pointer events for pulling the curtain */
   function _bindCurtainDrag(canvas) {
-    let dragging = false;
     let startX = 0;
     let pullDistance = 0;
+    let dragging = false;
 
     const onDown = (ev) => {
       if (isTransitioning || currentScene !== 'outside') return;
       const pos = UI.pointerPos(ev, canvas);
       startX = pos.x;
       pullDistance = 0;
+      
       const c = curtain.handlePointerDown(pos.x, pos.y);
       dragging = !!c;
       if (dragging) {
@@ -113,19 +74,37 @@ window.Scenes = (function () {
         UI.disableSelection();
       }
     };
+
     const onMove = (ev) => {
       if (!dragging) return;
       const pos = UI.pointerPos(ev, canvas);
-      pullDistance = Math.max(pullDistance, Math.abs(pos.x - startX));
+      const deltaX = pos.x - startX;
+
+      // If dragging to the left, slide the curtain anchors in real-time
+      if (deltaX < 0) {
+        curtain.setAnchorOffset(deltaX);
+        pullDistance = Math.abs(deltaX);
+      } else {
+        curtain.setAnchorOffset(0);
+        pullDistance = 0;
+      }
+
       curtain.handlePointerMove(pos.x, pos.y);
       ev.preventDefault();
     };
+
     const onUp = () => {
       if (!dragging) return;
       dragging = false;
       curtain.handlePointerUp();
       UI.enableSelection();
-      if (pullDistance > Math.max(90, canvas.clientWidth * 0.28)) enterBooth();
+      
+      // Require pulling the curtain at least 78% of the width (fully left) to enter
+      if (pullDistance > canvas.clientWidth * 0.78) {
+        enterBooth();
+      } else {
+        curtain.close('out'); // Snap closed
+      }
     };
 
     canvas.addEventListener('mousedown', onDown);
@@ -144,35 +123,18 @@ window.Scenes = (function () {
     curtain && curtain.close('out');
   }
 
-  /* ---------- Neon sign (Matter.js pendulum) ---------- */
+  /* ---------- Neon sign Pendulum ---------- */
   function _buildNeonSign() {
     const el = document.getElementById('neonSign');
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const parentRect = el.parentElement.getBoundingClientRect();
 
-    // Center of the sign element relative to viewport
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-
-    // Anchor point (top of chains) — slightly above the sign
-    const ax = cx;
-    const ay = rect.top - 6;
-
-    // Create the body at the sign's position
-    neonBody = Bodies.rectangle(cx, cy, rect.width, rect.height, {
-      label: 'neon-sign',
-      isStatic: true,
-      collisionFilter: { group: -1, category: 0, mask: 0 }
-    });
-
-    Physics.add(neonBody);
-
-    // Hover increases glow (CSS handles via :hover)
-    // Click triggers flicker + a swing impulse
+    // Hover triggers flicker and swing impulse
     el.addEventListener('click', () => {
       el.classList.add('is-flickering');
       setTimeout(() => el.classList.remove('is-flickering'), 1200);
+      
+      // Inject random angular velocity push
+      neonAngularVelocity += (Math.random() > 0.5 ? 1 : -1) * (0.15 + Math.random() * 0.15);
     });
   }
 
@@ -183,38 +145,24 @@ window.Scenes = (function () {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
 
-      // Clear the curtain canvas ONCE per frame, then draw both cloths.
-      // (Each Cloth.draw() no longer clears — see cloth.js.)
-      if (curtain) {
-        const canvas = document.getElementById('curtainCanvas');
-        if (canvas) {
-          const ctx = canvas.getContext('2d');
-          const dpr = Math.min(window.devicePixelRatio || 1, 2);
-          ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
-        }
-      }
-
-      // Curtains
+      // Curtains tick (Three.js handles canvas clearing itself)
       if (curtain) curtain.tick(dt);
 
-      // Sync sign elements to their Matter.js bodies
-      _syncSign('neonSign', neonBody);
+      // Solve pendulum swing for neon sign
+      const torque = -0.06 * Math.sin(neonAngle);
+      neonAngularVelocity += torque;
+      neonAngularVelocity *= neonDamping;
+      neonAngle += neonAngularVelocity * dt * 30;
+
+      // Sync neon sign rotation
+      const el = document.getElementById('neonSign');
+      if (el) {
+        el.style.transform = `translateX(-50%) rotate(${neonAngle}rad)`;
+      }
 
       outsideRenderLoop = requestAnimationFrame(frame);
     }
     outsideRenderLoop = requestAnimationFrame(frame);
-  }
-
-  function _syncSign(id, body) {
-    if (!body) return;
-    const el = document.getElementById(id);
-    if (!el) return;
-    // The element's CSS already has transform: translateX(-50%) ...
-    // We apply rotation based on the body angle, plus a small position offset
-    // relative to the body's home.
-    const dx = body.position.x - body.positionPrev.x;
-    // Just rotate (the constraint keeps position roughly fixed)
-    el.style.transform = `translateX(-50%) rotate(${body.angle}rad)`;
   }
 
   /* ---------- Enter sequence ---------- */
@@ -265,8 +213,7 @@ window.Scenes = (function () {
     void rig.offsetWidth;
     rig.style.transition = '';
 
-    // 8. Curtains stay closed (they will reopen during the next exit sequence).
-    //    Interior dark is no longer needed — the inside scene has its own walls.
+    // 8. Curtains stay closed
     interiorDark && interiorDark.classList.remove('is-visible');
 
     // 9. Brief settle, then fade veil to reveal inside
@@ -292,13 +239,11 @@ window.Scenes = (function () {
     const veil = document.getElementById('interiorVeil');
     const interiorDark = document.getElementById('interiorDark');
 
-    // 1. Veil fades in (stepping back through the curtain)
+    // 1. Veil fades in
     veil.classList.add('is-visible');
     await UI.wait(500);
 
-    // 2. Swap scenes (hidden by veil). Outside scene is now shown but
-    //    cameraRig is at scale 1 — we need to set it to "zoomed in"
-    //    to match the end-state of the enter sequence.
+    // 2. Swap scenes
     inside.hidden = true;
     outside.hidden = false;
     currentScene = 'outside';
@@ -309,8 +254,7 @@ window.Scenes = (function () {
     void rig.offsetWidth;
     rig.style.transition = '';
 
-    // 4. Curtains are still closed (from enter sequence). Now we reopen them
-    //    as the camera pulls back.
+    // 4. Reopen curtains as the camera pulls back
     _openCurtains();
     interiorDark && interiorDark.classList.add('is-visible');
 
@@ -331,6 +275,9 @@ window.Scenes = (function () {
     // 7. Interior dark fades out (curtains fully open)
     interiorDark && interiorDark.classList.remove('is-visible');
 
+    // Reset curtain simulation grid to ensure it is in its perfect original flat state
+    if (curtain) curtain.reset();
+
     isTransitioning = false;
 
     // Notify app — printer can activate
@@ -342,6 +289,10 @@ window.Scenes = (function () {
   function isOutside() { return currentScene === 'outside'; }
   function getScene() { return currentScene; }
 
+  function resetCurtains() {
+    curtain && curtain.reset();
+  }
+
   return {
     initOutside,
     enterBooth,
@@ -349,6 +300,7 @@ window.Scenes = (function () {
     isInside,
     isOutside,
     getScene,
+    resetCurtains,
     get isTransitioning() { return isTransitioning; }
   };
 })();

@@ -1,14 +1,7 @@
 /* ============================================================
    printer.js
    Handles the printing sequence (motor → emerge → stop → bounce)
-   and the Matter.js-driven strip that the user pulls out.
-
-   Public API:
-     Printer.show(stripCanvas)   — reveal the printer stage
-     Printer.startPrinting()     — begin the print sequence (Promise)
-     Printer.enablePull(onReady) — enable Matter.js drag-to-pull
-     Printer.hide()              — tear down
-     Printer.onDownload(cb)      — register download handler
+   and a custom physics-free 2D canvas simulation of the photo strip.
    ============================================================ */
 
 window.Printer = (function () {
@@ -27,270 +20,244 @@ window.Printer = (function () {
 
   let stripImage = null;     // the finished strip canvas (image source)
   let baseStripImage = null; // untouched strip used for detail edits
-  let stripBody = null;
-  let stripConstraint = null;  // anchor at slot
   let pullActive = false;
   let detached = false;
-  let dragBody = null;
   let renderLoop = null;
   let downloadCb = null;
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  // Simulation physics parameters
+  let emergeProgress = 0; // 0 to 1 during automatic printing
+  let isPrinting = false;
+  let printTime = 0;
+
+  let stripY = 0;         // current vertical position of the strip relative to the slot
+  let targetStripY = 0;
+  let stripX = 0;         // current horizontal displacement
+  let stripAngle = 0;     // swing angle in radians
+  let angleVelocity = 0;  // angular velocity for swaying
+  
+  let isDragging = false;
+  let dragStartMouseY = 0;
+  let dragStartStripY = 0;
+  
+  let onPullComplete = null;
 
   /* ---------- Show / hide ---------- */
   function show(stripCanvas) {
     stripImage = stripCanvas;
     baseStripImage = stripCanvas;
-    const s = stage();
-    s.hidden = false;
-    // Reset state
     detached = false;
     pullActive = false;
-    stage().classList.remove('is-preview');
-    if (preview()) preview().hidden = true;
-    if (nameInput()) nameInput().value = '';
-    if (dateInput()) dateInput().value = '';
-    downloadBtn().classList.remove('is-ready');
-    downloadBtn().disabled = true;
-    document.getElementById('newPhotoBtn').classList.remove('is-ready');
-    instr().textContent = 'PRINTING…';
-    instr().classList.remove('is-prompt');
+    isPrinting = false;
+    emergeProgress = 0;
+    stripY = 0;
+    targetStripY = 0;
+    stripX = 0;
+    stripAngle = 0;
+    angleVelocity = 0;
+    isDragging = false;
+
+    // Reset instruction classes
+    const inEl = instr();
+    if (inEl) {
+      inEl.textContent = 'PRINTING PHOTO STRIP...';
+      inEl.className = 'printer-stage__instruction is-prompt';
+    }
+
+    const st = stage();
+    if (st) st.hidden = false;
+
+    const lp = lamp();
+    if (lp) {
+      lp.style.backgroundColor = '#ff3b30'; // red during print
+      lp.classList.add('is-printing');
+    }
+
+    _resizeCanvas();
+    _startRender();
   }
 
   function hide() {
     _stopRender();
-    _teardownStrip();
-    const s = stage();
-    if (s) s.hidden = true;
-    if (preview()) preview().hidden = true;
+    const st = stage();
+    if (st) st.hidden = true;
+
+    const lp = lamp();
+    if (lp) {
+      lp.style.backgroundColor = '';
+      lp.classList.remove('is-printing');
+    }
+
+    const mt = motor();
+    if (mt) mt.classList.remove('is-active');
+
+    stripImage = null;
+    baseStripImage = null;
   }
 
-  /* ---------- Printing sequence ---------- */
-  async function startPrinting() {
-    lamp().classList.add('is-active');
-    instr().textContent = 'PRINTING…';
-    instr().classList.remove('is-prompt');
+  /* ---------- Printing emerge sequence ---------- */
+  function startPrinting() {
+    return new Promise((resolve) => {
+      isPrinting = true;
+      printTime = 0;
+      emergeProgress = 0;
 
-    // Motor hum
-    motor().classList.add('is-active');
-    await UI.wait(300);
+      const mt = motor();
+      if (mt) mt.classList.add('is-active');
 
-    // The strip slowly emerges — done via Matter.js body translation
-    _setupStrip();
-    _startRender();
+      function step() {
+        if (!isPrinting) return;
+        
+        // Emerge over 2.6 seconds
+        printTime += 16.67; 
+        emergeProgress = Math.min(1, printTime / 2600);
+        
+        // Custom easing: slow start, fast slide, cushion bounce at end
+        stripY = emergeProgress * 240; 
+        
+        // Wiggle horizontally slightly to simulate motor gears printing
+        stripX = Math.sin(printTime * 0.05) * 0.75 * (1 - emergeProgress);
 
-    // Emerge animation: move the strip downward from its hidden start position
-    // to its "hang partially outside" position.
-    const targetY = _emergeTargetY();
-    await _emergeStrip(targetY, 2200);
+        if (emergeProgress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          // Finish printing
+          isPrinting = false;
+          if (mt) mt.classList.remove('is-active');
+          
+          const lp = lamp();
+          if (lp) {
+            lp.style.backgroundColor = '#34c759'; // green when ready
+            lp.classList.remove('is-printing');
+          }
 
-    // Mechanical stop + small bounce
-    motor().classList.remove('is-active');
-    await _bounceStrip();
+          resolve();
+        }
+      }
 
-    // Lamp steady
-    lamp().classList.remove('is-active');
-
-    instr().textContent = 'PULL STRIP DOWN TO REMOVE';
-    instr().classList.add('is-prompt');
+      requestAnimationFrame(step);
+    });
   }
 
-  /* ---------- Enable drag-to-pull ---------- */
+  /* ---------- Interactive dragging ---------- */
   function enablePull(onReady) {
     pullActive = true;
-    downloadCb = onReady;
+    onPullComplete = onReady;
+
+    const inEl = instr();
+    if (inEl) {
+      inEl.textContent = 'PULL STRIP TO DETACH';
+      inEl.classList.add('is-pulse');
+    }
 
     const canvas = stripCanvasEl();
     if (!canvas) return;
 
-    const onDown = (ev) => {
-      if (!pullActive || detached) return;
-      ev.preventDefault();
-      const pos = UI.pointerPos(ev, canvas);
-      // Try to grab the strip body if pointer is over it
-      if (_isOverStrip(pos.x, pos.y)) {
-        dragBody = stripBody;
-        UI.disableSelection();
-      }
-    };
-    const onMove = (ev) => {
-      if (!dragBody) return;
-      ev.preventDefault();
-      const pos = UI.pointerPos(ev, canvas);
-      // Move body toward pointer
-      const { Body } = Physics.M;
-      Body.setPosition(stripBody, { x: pos.x, y: pos.y });
-      Body.setVelocity(stripBody, { x: 0, y: 0 });
-      Body.setAngularVelocity(stripBody, 0);
+    // Remove existing if any
+    canvas.onmousedown = null;
+    canvas.ontouchstart = null;
 
-      // Check detach threshold
-      if (stripBody.position.y > _detachThreshold()) {
-        _detach();
-      }
-    };
-    const onUp = () => {
-      dragBody = null;
-      UI.enableSelection();
-    };
-
-    canvas.addEventListener('mousedown', onDown);
-    canvas.addEventListener('touchstart', onDown, { passive: false });
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchend', onUp);
-
-    // Stash for cleanup
-    _cleanup = () => {
-      canvas.removeEventListener('mousedown', onDown);
-      canvas.removeEventListener('touchstart', onDown);
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchend', onUp);
-    };
+    canvas.addEventListener('mousedown', _onPointerDown);
+    canvas.addEventListener('touchstart', _onPointerDown, { passive: false });
   }
 
-  let _cleanup = () => {};
-
-  /* ---------- Internal: setup Matter.js strip body ---------- */
-  function _setupStrip() {
-    const { M } = Physics;
-    const { Bodies, Body, Constraint } = M;
-
+  function _onPointerDown(ev) {
+    if (!pullActive || detached) return;
+    
+    ev.preventDefault();
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    
+    // Bounds check to verify if the user clicked the strip
     const canvas = stripCanvasEl();
-    _resizeCanvas();
+    const rect = canvas.getBoundingClientRect();
+    const clickX = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
+    const clickY = clientY - rect.top;
 
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
+    // Check if click was roughly within the strip horizontal area and below the slot lip (y > 14)
+    const midX = rect.width / 2;
+    const stripWidth = 140; // width of strip on canvas
+    if (clickX < midX - stripWidth / 2 - 10 || clickX > midX + stripWidth / 2 + 10 || clickY < 14) {
+      return;
+    }
 
-    // Strip dimensions in canvas-local px
-    const stripW = Math.min(180, w * 0.32);
-    const stripH = stripImage ? (stripW * stripImage.height / stripImage.width) : stripW * 3;
+    isDragging = true;
+    dragStartMouseY = clientY;
+    dragStartStripY = stripY;
 
-    // Start the strip hidden above the slot (y is negative)
-    const startX = w / 2;
-    const startY = -stripH / 2 + 8; // only the very tip is in the slot
-
-    stripBody = Bodies.rectangle(startX, startY, stripW, stripH, {
-      frictionAir: 0.04,
-      density: 0.0012,
-      mass: 0.05,
-      label: 'photo-strip',
-      isStatic: false,
-      collisionFilter: { group: -1, category: 0, mask: 0 }
-    });
-    Body.setStatic(stripBody, true); // hold during emerge
-
-    // Anchor to slot top — pointB is in world space at slot center
-    stripConstraint = Constraint.create({
-      bodyA: stripBody,
-      pointA: { x: 0, y: -stripH / 2 },
-      pointB: { x: startX, y: 14 }, // just below slot lip
-      stiffness: 0.9,
-      damping: 0.2,
-      length: 0,
-      render: { visible: false }
-    });
-
-    Physics.add(stripBody);
-    Physics.add(stripConstraint);
+    window.addEventListener('mousemove', _onPointerMove);
+    window.addEventListener('touchmove', _onPointerMove, { passive: false });
+    window.addEventListener('mouseup', _onPointerUp);
+    window.addEventListener('touchend', _onPointerUp);
   }
 
-  function _teardownStrip() {
-    if (stripConstraint) { Physics.remove(stripConstraint); stripConstraint = null; }
-    if (stripBody)       { Physics.remove(stripBody); stripBody = null; }
-    _cleanup();
-    _cleanup = () => {};
-  }
+  function _onPointerMove(ev) {
+    if (!isDragging) return;
+    ev.preventDefault();
 
-  /* ---------- Internal: emerge animation ---------- */
-  function _emergeTargetY() {
-    const canvas = stripCanvasEl();
-    const h = canvas.clientHeight;
-    // Hang about 55% of the strip below the slot
-    return h * 0.32;
-  }
+    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+    const deltaY = clientY - dragStartMouseY;
 
-  function _detachThreshold() {
-    const canvas = stripCanvasEl();
-    return canvas.clientHeight * 0.7;
-  }
-
-  async function _emergeStrip(targetY, duration) {
-    const { Body } = Physics.M;
-    const startY = stripBody.position.y;
-    await UI.tween({
-      duration,
-      ease: UI.ease.inOutCubic,
-      onUpdate: (e) => {
-        const y = startY + (targetY - startY) * e;
-        Body.setPosition(stripBody, { x: stripBody.position.x, y });
+    // Pulling down only (no pushing back into the machine)
+    if (deltaY > 0) {
+      stripY = dragStartStripY + deltaY;
+      
+      // Pulling past 340px detaches the strip completely
+      if (stripY > 340) {
+        _detachStrip();
       }
-    });
+    }
   }
 
-  async function _bounceStrip() {
-    const { Body } = Physics.M;
-    const y = stripBody.position.y;
-    // Quick down-up-down wiggle
-    await UI.tween({
-      duration: 180,
-      ease: UI.ease.outCubic,
-      onUpdate: e => Body.setPosition(stripBody, { x: stripBody.position.x, y: y + 6 * e })
-    });
-    await UI.tween({
-      duration: 220,
-      ease: UI.ease.outBack,
-      onUpdate: e => Body.setPosition(stripBody, { x: stripBody.position.x, y: y + 6 - 6 * e })
-    });
-    Body.setPosition(stripBody, { x: stripBody.position.x, y });
+  function _onPointerUp() {
+    isDragging = false;
+    window.removeEventListener('mousemove', _onPointerMove);
+    window.removeEventListener('touchmove', _onPointerMove);
+    window.removeEventListener('mouseup', _onPointerUp);
+    window.removeEventListener('touchend', _onPointerUp);
   }
 
-  /* ---------- Internal: detach ---------- */
-  function _detach() {
+  function _detachStrip() {
     if (detached) return;
     detached = true;
-    dragBody = null;
-    // Release anchor
-    if (stripConstraint) {
-      Physics.remove(stripConstraint);
-      stripConstraint = null;
-    }
-    // The physical strip has been pulled free. Remove its simulated body
-    // instead of releasing it into gravity; the finished image becomes a
-    // stable, zoomed preview immediately.
-    _stopRender();
-    if (stripBody) {
-      Physics.remove(stripBody);
-      stripBody = null;
+    isDragging = false;
+    
+    // Animate falling off
+    const canvas = stripCanvasEl();
+    const targetY = canvas.clientHeight + 200;
+
+    const inEl = instr();
+    if (inEl) {
+      inEl.textContent = 'SAVED TO HAND';
+      inEl.className = 'printer-stage__instruction is-success';
     }
 
-    instr().textContent = 'PRINT COMPLETE';
-    instr().classList.remove('is-prompt');
-    _showPreview();
-    downloadBtn().disabled = false;
-    downloadBtn().classList.add('is-ready');
-    document.getElementById('newPhotoBtn').classList.add('is-ready');
+    // Trigger download panel enable
+    if (onPullComplete) {
+      onPullComplete();
+    }
+
+    // Swings and slides down completely off screen
+    let t = 0;
+    function fall() {
+      t += 0.04;
+      stripY += (targetY - stripY) * 0.16;
+      stripAngle += 0.08 * Math.sin(t);
+      if (stripY < targetY - 1) {
+        requestAnimationFrame(fall);
+      } else {
+        // Finished falling, hide printer screen and open inline preview
+        hide();
+        showInline(stripImage);
+      }
+    }
+    requestAnimationFrame(fall);
   }
 
+  /* ---------- Canvas rendering ---------- */
   function _showPreview() {
-    const s = stage();
-    const card = preview();
-    const canvas = previewCanvas();
-    if (!s || !card || !canvas || !stripImage) return;
-    s.classList.add('is-preview');
-    card.hidden = false;
-    const rect = canvas.getBoundingClientRect();
-    const scale = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.max(1, Math.floor(rect.width * scale));
-    canvas.height = Math.max(1, Math.floor(rect.height * scale));
-    const ctx = canvas.getContext('2d');
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    ctx.clearRect(0, 0, rect.width, rect.height);
-    const fit = Math.min(rect.width / stripImage.width, rect.height / stripImage.height);
-    const w = stripImage.width * fit;
-    const h = stripImage.height * fit;
-    ctx.drawImage(stripImage, (rect.width - w) / 2, (rect.height - h) / 2, w, h);
+    // Redraws the static canvas inside the details overlay
+    _drawDevelopingPolaroid();
   }
 
   function _applyDetails() {
@@ -306,6 +273,7 @@ window.Printer = (function () {
     const detailed = document.createElement('canvas');
     detailed.width = baseStripImage.width;
     detailed.height = baseStripImage.height + footerHeight;
+    
     const ctx = detailed.getContext('2d');
     ctx.fillStyle = '#fffaf0';
     ctx.fillRect(0, 0, detailed.width, detailed.height);
@@ -316,8 +284,10 @@ window.Printer = (function () {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `600 ${Math.max(18, Math.round(baseStripImage.width * 0.035))}px Arial, sans-serif`;
+    
     const dateText = rawDate ? new Date(`${rawDate}T00:00:00`).toLocaleDateString() : '';
     ctx.fillText([name, dateText].filter(Boolean).join('  ·  '), detailed.width / 2, baseStripImage.height + footerHeight / 2);
+    
     stripImage = detailed;
     _showPreview();
     applyDetailsBtn().textContent = 'DETAILS ADDED';
@@ -329,7 +299,7 @@ window.Printer = (function () {
     function frame(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      _drawStrip();
+      _drawStrip(dt);
       renderLoop = requestAnimationFrame(frame);
     }
     renderLoop = requestAnimationFrame(frame);
@@ -342,9 +312,9 @@ window.Printer = (function () {
     }
   }
 
-  function _drawStrip() {
+  function _drawStrip(dt) {
     const canvas = stripCanvasEl();
-    if (!canvas || !stripBody) return;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
@@ -352,20 +322,46 @@ window.Printer = (function () {
     ctx.save();
     ctx.clearRect(0, 0, w, h);
 
-    // Only draw the portion of the strip that is below the slot lip (y > 0)
-    // We do this by clipping.
+    // Only draw the portion of the strip that is below the slot lip (y > 14)
     ctx.beginPath();
     ctx.rect(0, 14, w, h - 14);
     ctx.clip();
 
-    const pos = stripBody.position;
-    const angle = stripBody.angle;
-    const sw = stripBody.bounds.max.x - stripBody.bounds.min.x;
-    const sh = stripBody.bounds.max.y - stripBody.bounds.min.y;
+    // If not dragging and not detached, snap back slowly to default printing location
+    if (!isDragging && !detached && !isPrinting) {
+      stripY += (240 - stripY) * 0.16;
+    }
+
+    // Pendulum swing swaying math
+    if (!isDragging && !detached) {
+      const springK = -1.2;
+      const dampingForce = -0.92;
+      const torque = springK * stripAngle;
+      angleVelocity += torque * dt;
+      angleVelocity *= dampingForce;
+      stripAngle += angleVelocity * dt * 45;
+    } else if (isDragging) {
+      // Rotate based on dragging drag sways
+      stripAngle = -Math.sin(performance.now() * 0.005) * 0.035;
+    }
+
+    const sw = 140; // display width of strip
+    const sh = 350; // display height of strip
+    const cx = w / 2 + stripX;
+    
+    // Slot is at Y = 14. Top of strip starts emerging from Y=14
+    const cy = 14 + stripY - sh / 2;
 
     if (stripImage) {
-      ctx.translate(pos.x, pos.y);
-      ctx.rotate(angle);
+      ctx.translate(cx, cy);
+      ctx.rotate(stripAngle);
+
+      // Subtle drop shadow on the paper strip
+      ctx.shadowColor = 'rgba(0,0,0,0.38)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 3;
+
       ctx.drawImage(
         stripImage,
         -sw / 2,
@@ -373,22 +369,9 @@ window.Printer = (function () {
         sw,
         sh
       );
-
-      // Subtle drop shadow on the strip
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetX = 1;
-      ctx.shadowOffsetY = 2;
     }
 
     ctx.restore();
-  }
-
-  function _isOverStrip(x, y) {
-    if (!stripBody) return false;
-    // AABB check on body bounds
-    const b = stripBody.bounds;
-    return x >= b.min.x - 6 && x <= b.max.x + 6 && y >= b.min.y - 6 && y <= b.max.y + 6;
   }
 
   function _resizeCanvas() {
@@ -409,7 +392,6 @@ window.Printer = (function () {
     const card = preview();
     if (!card) return;
     
-    // Add the preview mode class to the inside scene to blur the background
     const insideScene = document.getElementById('sceneInside');
     if (insideScene) {
       insideScene.classList.add('is-preview');
@@ -422,12 +404,19 @@ window.Printer = (function () {
     
     // Reset inputs
     if (nameInput()) nameInput().value = '';
-    if (dateInput()) dateInput().value = '';
+    if (dateInput()) {
+      // Set default date input value to today's date in local timezone
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      dateInput().value = `${yyyy}-${mm}-${dd}`;
+    }
     downloadBtn().disabled = true;
     downloadBtn().classList.remove('is-ready');
     document.getElementById('newPhotoBtn').classList.remove('is-ready');
+    applyDetailsBtn().textContent = 'ADD DETAILS';
     
-    // Trigger the dynamic developing animation
     _drawDevelopingPolaroid();
   }
 
@@ -456,8 +445,6 @@ window.Printer = (function () {
     if (!canvas || !stripImage || !card) return;
     
     const scale = Math.min(window.devicePixelRatio || 1, 2);
-    
-    // Calculate display dimensions dynamically based on strip aspect ratio (foolproof against layout racing)
     const aspect = stripImage.height / stripImage.width;
     const isMobile = window.innerWidth <= 600;
     const displayWidth = isMobile ? Math.min(150, window.innerWidth * 0.40) : Math.min(230, window.innerWidth * 0.46);
@@ -473,7 +460,6 @@ window.Printer = (function () {
     const ctx = canvas.getContext('2d');
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     
-    // Click on canvas to toggle magnification zoom!
     if (!canvas.dataset.hasZoomListener) {
       canvas.addEventListener('click', () => {
         card.classList.toggle('is-magnified');
@@ -491,16 +477,15 @@ window.Printer = (function () {
       
       ctx.clearRect(0, 0, displayWidth, displayHeight);
       
-      // 1. Draw paper substrate (blank white/vintage paper)
+      // 1. Draw paper substrate
       ctx.fillStyle = '#f8f1e5';
       ctx.fillRect(0, 0, displayWidth, displayHeight);
       
-      // Paper border stroke
       ctx.strokeStyle = 'rgba(40,20,5,0.15)';
       ctx.lineWidth = 1;
       ctx.strokeRect(0, 0, displayWidth, displayHeight);
       
-      // 2. Compute fading opacity: blank for first 0.35s (20% progress), then fade in!
+      // 2. Fading opacity
       let opacity = 0;
       if (progress > 0.2) {
         opacity = (progress - 0.2) / 0.8;
@@ -509,12 +494,11 @@ window.Printer = (function () {
       
       ctx.globalAlpha = opacity;
       ctx.drawImage(stripImage, 0, 0, displayWidth, displayHeight);
-      ctx.globalAlpha = 1.0; // reset
+      ctx.globalAlpha = 1.0;
       
       if (progress < 1) {
         requestAnimationFrame(drawStep);
       } else {
-        // Developing is complete! Enable download and new photo buttons!
         downloadBtn().disabled = false;
         downloadBtn().classList.add('is-ready');
         document.getElementById('newPhotoBtn').classList.add('is-ready');
@@ -545,6 +529,16 @@ window.Printer = (function () {
   });
 
   applyDetailsBtn()?.addEventListener('click', _applyDetails);
+
+  // Set default date input value to today's date in local timezone
+  const dEl = dateInput();
+  if (dEl) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dEl.value = `${yyyy}-${mm}-${dd}`;
+  }
 
   return {
     show,
