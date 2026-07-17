@@ -671,6 +671,14 @@ body::before {
     gap: 6px;
   }
   .strip-preview__apply { grid-column: 1 / -1; }
+  .strip-preview.is-focusing-input .strip-preview__canvas {
+    display: none !important;
+  }
+  .strip-preview.is-focusing-input {
+    top: 15% !important;
+    transform: translate(-50%, 0) !important;
+    max-height: 80vh;
+  }
 }
 
 /* --- Viewfinder Blinking REC dot --- */

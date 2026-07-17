@@ -692,6 +692,18 @@ window.Printer = (function () {
   applyDetailsBtn()?.addEventListener('click', _applyDetails);
   document.getElementById('filterSelect')?.addEventListener('change', _rebuildAndShow);
 
+  const onInputFocus = () => {
+    preview()?.classList.add('is-focusing-input');
+  };
+  const onInputBlur = () => {
+    preview()?.classList.remove('is-focusing-input');
+  };
+
+  nameInput()?.addEventListener('focus', onInputFocus);
+  nameInput()?.addEventListener('blur', onInputBlur);
+  dateInput()?.addEventListener('focus', onInputFocus);
+  dateInput()?.addEventListener('blur', onInputBlur);
+
   // Set default date input value to today's date in local timezone
   const dEl = dateInput();
   if (dEl) {

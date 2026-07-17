@@ -374,6 +374,7 @@
   box-shadow: inset 0 0 14px rgba(0,0,0,0.7);
   text-align: center;
   transition: transform 0.15s ease;
+  z-index: 20; /* Ensure emerging strip layers on top of toggle switch */
 }
 .printer-slot:hover { transform: translateY(-1px); }
 .printer-slot__lip {
@@ -403,6 +404,8 @@
 
 .printer-slot.is-printing {
   animation: slot-shimmy 0.12s linear infinite;
+  /* Disable transition to prevent conflict with animation transform */
+  transition: none !important;
   /* GPU-promote to prevent paint jitter on mobile */
   will-change: transform;
   transform: translateZ(0);
