@@ -590,6 +590,11 @@
   .ready-indicator__label { font-size: 0.5rem; }
   .enter-btn__label { font-size: 0.7rem; }
   .booth__btn-randomize { font-size: 0.55rem; padding: 4px 8px; margin-top: 0; }
+  .printer-slot.is-printing {
+    animation: none !important;
+    will-change: auto !important;
+    transform: none !important;
+  }
 }
 
 .booth__btn-randomize {

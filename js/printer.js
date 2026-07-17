@@ -651,10 +651,14 @@ window.Printer = (function () {
         height:    `${stripH}px`,
         display:   'block',
         transform: 'translateY(-100%)',
-        // GPU-accelerated ease-out for smooth film feed
+        // Smooth film feed ease-out
         transition: 'transform 3.6s cubic-bezier(0.25, 0.1, 0.1, 1.0)',
-        willChange: 'transform',
       });
+
+      // Only promote to compositor layer on larger screens (avoids memory/composite stutters on mobile)
+      if (window.innerWidth > 600) {
+        img.style.willChange = 'transform';
+      }
 
       wrapper.appendChild(img);
       mouthEl.appendChild(wrapper);
