@@ -584,7 +584,7 @@
 }
 
 @media (max-width: 600px) {
-  .booth { height: 60vh; }
+  .booth { height: auto; }
   .booth__column { padding: 10px 8px; gap: 10px; }
   .neon__tube { font-size: 0.75rem; padding: 6px 8px; }
   .ready-indicator__label { font-size: 0.5rem; }
