@@ -79,18 +79,7 @@
   border-bottom: none;
   box-shadow: inset 0 2px 0 rgba(255,220,160,0.2);
 }
-.booth__cornice::before,
-.booth__cornice::after {
-  content: '';
-  position: absolute;
-  top: -8px;
-  width: 30px; height: 12px;
-  background: linear-gradient(180deg, var(--metal-light), var(--metal-dark));
-  border: 2px solid var(--ink);
-  border-radius: 3px 3px 0 0;
-}
-.booth__cornice::before { left: 12%; }
-.booth__cornice::after  { right: 12%; }
+
 .booth__cornice-trim {
   position: absolute;
   left: 0; right: 0; bottom: -6px;
@@ -172,14 +161,14 @@
   box-shadow: inset 0 2px 3px rgba(0,0,0,0.8), inset 0 -1px 0 rgba(255,200,140,0.05);
 }
 
-/* Mustard Yellow Single-Color Randomize Button ---------------- */
+/* Mustard Yellow Single-Color Interactive RANDOMIZE Button ---- */
 .booth__btn-randomize {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   width: 90%;
-  padding: 10px 16px;
+  padding: 11px 18px;
   background-color: #d97706;
   border: 2px solid #1a1209;
   border-radius: 22px;
@@ -187,15 +176,12 @@
   font-family: 'Nority', var(--font-display);
   font-size: 0.85rem;
   font-weight: bold;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.18em;
   text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
-  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.booth__btn-randomize-icon {
-  font-size: 1.1rem;
+  transition: transform 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+  user-select: none;
 }
 
 .booth__btn-randomize:hover {
@@ -205,101 +191,184 @@
 }
 
 .booth__btn-randomize:active {
-  transform: translateY(1px);
+  transform: translateY(3px) scale(0.97);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.7), inset 0 2px 4px rgba(0,0,0,0.4);
 }
 
 /* ============================================================
-   Full-Width Neon Marquee Sign with Break & Swing Drop Effect
+   Full-Width Classic Japanese Storefront Sign Board
    ============================================================ */
-.neon--full-width {
+.storefront-sign--full-width {
   position: absolute;
-  top: -76px;
+  top: -58px;
   left: 0;
   right: 0;
   width: 100%;
-  transform-origin: 92% 0%;
   z-index: 10;
-  cursor: pointer;
-  transition: transform 0.7s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  user-select: none;
 }
 
-.neon--full-width.is-broken {
-  transform: rotate(26deg) translateY(24px);
-}
-
-.neon__chain {
-  position: absolute;
-  top: -18px;
-  width: 3px;
-  height: 22px;
-  background: linear-gradient(180deg, var(--metal-light, #b8a98c), var(--metal-dark, #7a6a55));
-  box-shadow: 1px 0 0 rgba(0,0,0,0.5);
-  z-index: 1;
-  transition: height 0.3s ease, opacity 0.3s ease;
-}
-.neon__chain--left { left: 8%; }
-.neon__chain--right { right: 8%; }
-
-.neon--full-width.is-broken .neon__chain--left {
-  height: 6px;
-  opacity: 0.3;
-}
-
-.neon--full-width .neon__backplate {
-  position: absolute;
-  inset: -4px 0;
-  background: linear-gradient(180deg, #1a0f08 0%, #0a0604 100%);
-  border: 3px solid var(--metal-brass-light, #cfa861);
+/* Main Wooden & Brass Board */
+.sign__board {
+  position: relative;
+  width: 100%;
+  padding: 6px 0;
   border-radius: 8px;
-  z-index: -1;
-  box-shadow: 0 0 25px rgba(0,0,0,0.85), inset 0 0 12px rgba(207,168,97,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
-.neon--full-width .neon__tube {
+.sign__brass-corner {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffe082, #8f723b);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  z-index: 2;
+}
+.sign__brass-corner--tl { top: 6px; left: 8px; }
+.sign__brass-corner--tr { top: 6px; right: 8px; }
+.sign__brass-corner--bl { bottom: 6px; left: 8px; }
+.sign__brass-corner--br { bottom: 6px; right: 8px; }
+
+.sign__text {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 10px 0;
+  z-index: 2;
+}
+
+.sign__title-main {
   font-family: 'Nority', sans-serif !important;
-  font-size: clamp(2.4rem, 5vw, 4.2rem) !important;
-  letter-spacing: 0.2em;
-  color: var(--neon-pink);
-  text-shadow:
-    0 0 10px var(--neon-pink),
-    0 0 25px var(--neon-pink),
-    0 0 50px rgba(255, 0, 102, 0.7);
-  animation: neon-glow 3s ease-in-out infinite;
+  font-size: clamp(2.2rem, 5vw, 4.2rem) !important;
+  font-weight: 900;
+  letter-spacing: 0.22em;
   white-space: nowrap;
+  transition: color 0.4s ease, text-shadow 0.4s ease;
 }
 
-.neon__sparks {
-  position: absolute;
-  top: -10px;
-  left: 6%;
-  font-size: 1.4rem;
-  pointer-events: none;
-  animation: spark-flash 0.3s steps(1) infinite;
+/* Mobile & Tablet Responsive Sign Sizing */
+@media (max-width: 768px) {
+  .storefront-sign--full-width {
+    top: -44px;
+  }
+  .sign__board {
+    padding: 4px 0;
+  }
+  .sign__title-main {
+    font-size: clamp(1.4rem, 4.5vw, 2.6rem) !important;
+    letter-spacing: 0.16em;
+  }
 }
 
-@keyframes spark-flash {
-  0%, 100% { opacity: 1; transform: scale(1.2); }
-  50% { opacity: 0.2; transform: scale(0.8); }
+@media (max-width: 480px) {
+  .storefront-sign--full-width {
+    top: -36px;
+  }
+  .sign__board {
+    padding: 3px 0;
+    border-width: 2.5px !important;
+  }
+  .sign__title-main {
+    font-size: clamp(1.1rem, 4vw, 1.9rem) !important;
+    letter-spacing: 0.14em;
+  }
 }
 
-/* Vending Machine Interactive Decal -------------------------- */
-.booth-vending-decal {
+/* NIGHT MODE: Deep Dark Mahogany Board + Warm Golden Carved Text */
+.storefront-sign.is-night-mode .sign__board,
+html[data-theme="dark"] .storefront-sign .sign__board {
+  background: linear-gradient(180deg, #362014 0%, #1e110a 100%);
+  border: 3.5px solid #cfa861;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.85), inset 0 0 15px rgba(0,0,0,0.7);
+}
+.storefront-sign.is-night-mode .sign__title-main,
+html[data-theme="dark"] .storefront-sign .sign__title-main {
+  color: #ffc83b;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.95),
+    0 0 12px rgba(255, 200, 59, 0.35);
+}
+
+/* DAY MODE: Polished Rich Walnut Board + Warm Cream Gold Carved Text */
+.storefront-sign.is-day-mode .sign__board,
+html[data-theme="light"] .storefront-sign .sign__board {
+  background: linear-gradient(180deg, #5c3822 0%, #3d2314 100%);
+  border: 3.5px solid #d97706;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.6), inset 0 0 10px rgba(0,0,0,0.4);
+}
+.storefront-sign.is-day-mode .sign__title-main,
+html[data-theme="light"] .storefront-sign .sign__title-main {
+  color: #fff8e7;
+  text-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.9),
+    0 0 2px #d97706;
+}
+
+/* Claw Machine Interactive Decal ----------------------------- */
+.booth-claw-decal {
   position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 250px;
+  margin-top: 4px;
   cursor: pointer;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.18s ease, filter 0.18s ease;
 }
-.booth-vending-decal:hover {
+
+.booth-claw-decal img {
+  width: 105%;
+  height: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,0.8));
+  transition: transform 0.18s ease;
+}
+
+.booth-claw-decal:hover {
   transform: scale(1.05);
   filter: brightness(1.15);
 }
-.booth-vending-decal.is-dispensing {
+
+.booth-claw-decal.is-dispensing {
   animation: vending-shake 0.4s ease;
+}
+
+.claw-play-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.85);
+  background: rgba(217, 119, 6, 0.94);
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  padding: 6px 22px;
+  border-radius: 24px;
+  font-family: 'Nority', sans-serif !important;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.75), 0 0 15px rgba(217,119,6,0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+.booth-claw-decal:hover .claw-play-badge {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .vending-coin-anim {
@@ -309,9 +378,9 @@
   background: #ffaa00;
   color: #000;
   font-family: 'Nority', sans-serif;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: bold;
-  padding: 4px 10px;
+  padding: 4px 14px;
   border-radius: 14px;
   box-shadow: 0 0 12px rgba(255,170,0,0.8);
   animation: coin-pop 0.8s ease forwards;

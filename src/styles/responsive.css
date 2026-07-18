@@ -1,0 +1,255 @@
+/* ============================================================
+   Final responsive pass
+   Keeps the existing scene/component structure intact while
+   making the experience reliable on narrow and short viewports.
+   ============================================================ */
+
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+.world,
+.scene,
+.inside__shell {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+}
+
+button,
+input,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+.top-right-theme-toggle {
+  top: max(12px, var(--safe-top));
+  right: max(12px, var(--safe-right));
+}
+
+.scene--outside {
+  padding-bottom: max(12px, var(--safe-bottom));
+}
+
+.booth {
+  width: min(880px, calc(100vw - 24px));
+  height: min(70dvh, 760px);
+  max-height: calc(100dvh - 48px);
+}
+
+.booth__column {
+  min-width: 0;
+}
+
+.sign__title-main,
+.printer-slot__label,
+.printer-stage__title,
+.printer-stage__instruction {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.printer-stage {
+  padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
+  gap: 12px;
+}
+
+.printer-stage__panel {
+  width: min(380px, 100%);
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+}
+
+.printer-stage__mouth {
+  height: min(400px, 48dvh);
+}
+
+.strip-preview--compact {
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+  padding: 14px;
+  overscroll-behavior: contain;
+}
+
+.strip-preview__emoji-filters,
+.strip-preview__toggles-grid,
+.strip-preview__compact-actions {
+  min-width: 0;
+}
+
+.strip-preview__emoji-bar {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.strip-preview__emoji-btn,
+.strip-preview__btn,
+.inside-action-btn,
+.inside__close-btn,
+.claw-modal-close-btn {
+  min-height: 44px;
+}
+
+@media (max-width: 600px) {
+  .day-night-switch {
+    transform: scale(.86);
+    transform-origin: top right;
+  }
+
+  .booth {
+    width: min(calc(100vw - 16px), calc((100dvh - 42px) * .76));
+    height: min(75dvh, calc(100dvh - 42px));
+  }
+
+  .booth__column {
+    padding: 12px 8px;
+    gap: 10px;
+  }
+
+  .booth__vent {
+    gap: 2px;
+  }
+
+  .booth__vent span {
+    height: 18px;
+  }
+
+  .booth-claw-decal {
+    min-height: 0;
+  }
+
+  .printer-slot {
+    padding: 6px;
+  }
+
+  .printer-slot__mouth {
+    height: clamp(86px, 18dvh, 140px);
+  }
+
+  .inside__close-btn {
+    top: max(12px, var(--safe-top));
+    right: max(12px, var(--safe-right));
+  }
+
+  .viewfinder {
+    width: min(84vw, calc(100dvh - 190px));
+    max-width: calc(100vw - 40px);
+  }
+
+  .control-panel {
+    bottom: max(14px, calc(var(--safe-bottom) + 4px));
+    gap: 8px;
+    max-width: calc(100vw - 20px);
+  }
+
+  .inside-action-btn {
+    min-width: 0;
+    padding: 10px 14px !important;
+    font-size: clamp(.72rem, 3.3vw, .9rem) !important;
+  }
+
+  .preview-overlay {
+    padding: 0;
+  }
+
+  .strip-preview--compact {
+    top: calc(50% + var(--safe-top) / 2);
+    padding: 12px;
+    gap: 9px;
+  }
+
+  .strip-preview__toggles-grid {
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .strip-preview__emoji-filters {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .strip-preview__filter-title {
+    flex: 0 0 auto;
+    font-size: .65rem;
+  }
+
+  .strip-preview__emoji-btn {
+    flex: 0 0 40px;
+    min-height: 40px;
+    padding: 5px;
+  }
+
+  .strip-preview__compact-actions {
+    gap: 8px;
+  }
+
+  .strip-preview__btn {
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: .68rem;
+    letter-spacing: .06em;
+  }
+
+  .claw-modal-close-btn {
+    top: max(10px, var(--safe-top));
+    right: max(10px, var(--safe-right));
+    width: 44px;
+    height: 44px;
+  }
+
+  .claw-game-root .wrapper {
+    transform: scale(min(1, calc((100vw - 24px) / 360)));
+    transform-origin: center;
+  }
+}
+
+@media (max-height: 560px) and (orientation: landscape) {
+  .booth {
+    width: min(62vw, calc(100dvh * .76));
+    height: calc(100dvh - 28px);
+  }
+
+  .viewfinder {
+    width: min(42vw, calc(100dvh - 150px));
+  }
+
+  .control-panel {
+    bottom: max(8px, var(--safe-bottom));
+  }
+
+  .inside-action-btn {
+    padding-block: 8px !important;
+  }
+
+  .strip-preview--compact {
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booth,
+  .anime-particle,
+  .sakura {
+    animation: none;
+  }
+}

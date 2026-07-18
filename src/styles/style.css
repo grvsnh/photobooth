@@ -1,7 +1,7 @@
 /* style.css */
 @font-face {
 	font-family: 'Nority';
-	src: url('/assets/font/NorityDemo-0vVlz.otf') format('opentype');
+	src: url('../assets/font/NorityDemo-0vVlz.otf') format('opentype');
 	font-weight: normal;
 	font-style: normal;
 	font-display: swap;
@@ -9,7 +9,7 @@
 
 @font-face {
 	font-family: 'Nority Slanted';
-	src: url('/assets/font/NoritySlantedDemo-e9823.otf') format('opentype');
+	src: url('../assets/font/NoritySlantedDemo-e9823.otf') format('opentype');
 	font-weight: normal;
 	font-style: italic;
 	font-display: swap;
@@ -42,9 +42,9 @@
 
 	--font-display: 'Nority', 'Space Grotesk', sans-serif;
 	
-	/* Elongated Cabinet Dimensions */
-	--booth-height: clamp(540px, 78vh, 860px);
-	--booth-width: calc(var(--booth-height) * 0.62);
+	/* Dynamic Viewport Fluid Dimensions */
+	--booth-height: clamp(320px, 72vh, 840px);
+	--booth-width: calc(var(--booth-height) * 0.64);
 }
 
 /* Reset */
@@ -66,39 +66,51 @@ html, body {
 	justify-content: center;
 }
 
-/* Mobile Responsiveness: Push Photobooth back in original boxy design */
-@media (max-width: 768px), (max-height: 720px) {
+/* Dynamic Responsive Sizing for Tablets & Mobile Devices */
+@media (max-width: 1024px) {
 	:root {
-		--booth-height: clamp(380px, 66vh, 520px);
+		--booth-height: clamp(340px, 68vh, 680px);
+	}
+}
+
+@media (max-width: 768px) {
+	:root {
+		--booth-height: clamp(310px, 62vh, 520px);
 	}
 
 	.inside-action-btn {
-		min-height: 52px;
-		padding: 12px 22px;
-		font-size: 1rem !important;
+		min-height: clamp(44px, 7vh, 54px);
+		padding: 10px 18px;
+		font-size: clamp(0.85rem, 3.5vw, 1.1rem) !important;
 	}
 
 	.booth__btn-randomize {
-		min-height: 44px;
-		padding: 10px 18px;
-		font-size: 0.85rem !important;
+		min-height: clamp(38px, 5.5vh, 46px);
+		padding: 8px 14px;
+		font-size: clamp(0.75rem, 3vw, 0.9rem) !important;
 	}
 
 	.inside__close-btn {
-		width: 48px;
-		height: 48px;
-		font-size: 1.8rem;
+		width: clamp(40px, 6vw, 48px);
+		height: clamp(40px, 6vw, 48px);
+		font-size: clamp(1.4rem, 4vw, 1.8rem);
 	}
 
 	.download-btn, .new-photo-btn, .strip-preview__apply {
-		min-height: 50px;
-		font-size: 0.95rem;
+		min-height: 46px;
+		font-size: 0.9rem;
 	}
 }
 
 @media (max-width: 480px) {
 	:root {
-		--booth-height: clamp(340px, 60vh, 460px);
+		--booth-height: clamp(280px, 58vh, 440px);
+	}
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+	:root {
+		--booth-height: clamp(250px, 80vh, 400px);
 	}
 }
 
