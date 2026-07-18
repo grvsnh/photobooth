@@ -10,7 +10,7 @@ import { gsap } from 'gsap';
 export class Cloth {
   constructor(canvas, opts) {
     this.canvas = canvas;
-    this.active = false;
+    this.active = true;
     this.time = 0;
 
     this.opts = Object.assign({
@@ -28,12 +28,12 @@ export class Cloth {
 
     this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    this.curtainHeight = 2.75;
-    this.topY = 2.20;
-    const aspect = canvas.clientWidth / canvas.clientHeight;
-    this.curtainWidth = 4.84 * aspect * 0.93;
+    this.curtainHeight = 2.50;
+    this.topY = 2.05;
+    const aspect = (canvas.clientWidth || 300) / (canvas.clientHeight || 400);
+    this.curtainWidth = 4.6 * aspect * 0.93;
 
-    this.pixelTo3D = this.curtainWidth / canvas.clientWidth;
+    this.pixelTo3D = this.curtainWidth / (canvas.clientWidth || 300);
     this.closeDX3D = this.opts.closeDX * this.pixelTo3D;
 
     this.state = {
@@ -52,7 +52,7 @@ export class Cloth {
   }
 
   _createCurtainTexture(text) {
-    const sheetWidth = this.curtainWidth / 2 - 0.09;
+    const sheetWidth = this.curtainWidth / 2 + 0.05;
     const sheetHeight = this.curtainHeight;
     const sheetAspect = Math.max(0.1, sheetWidth / sheetHeight);
 
@@ -119,12 +119,21 @@ export class Cloth {
       alpha: true,
       powerPreference: 'high-performance'
     });
+
+    const gl = this.renderer.getContext();
+    if (gl && gl.pixelStorei) {
+      try {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      } catch (e) {}
+    }
+
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setPixelRatio(this.dpr);
-    this.renderer.setSize(this.canvas.clientWidth, this.canvas.clientHeight, false);
+    this.renderer.setSize(this.canvas.clientWidth || 300, this.canvas.clientHeight || 400, false);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(40, this.canvas.clientWidth / this.canvas.clientHeight, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(40, (this.canvas.clientWidth || 300) / (this.canvas.clientHeight || 400), 0.1, 100);
     this.camera.position.set(0, 0, 6.0);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
@@ -170,7 +179,8 @@ export class Cloth {
     this.barMesh.position.set(0, this.topY + 0.06, 0);
     this.scene.add(this.barMesh);
 
-    const cols = this.opts.cols;
+    // Reduced hoop rings count (7 rings per curtain sheet instead of 30)
+    this.ringCount = 7;
     this.leftRings = [];
     this.rightRings = [];
     this.ringGeom = new THREE.TorusGeometry(0.065, 0.011, 8, 16);
@@ -181,13 +191,13 @@ export class Cloth {
       metalness: 0.88
     });
 
-    for (let x = 0; x < cols; x++) {
+    for (let k = 0; k < this.ringCount; k++) {
       const ringMesh = new THREE.Mesh(this.ringGeom, this.ringMat);
       this.scene.add(ringMesh);
       this.leftRings.push(ringMesh);
     }
 
-    for (let x = 0; x < cols; x++) {
+    for (let k = 0; k < this.ringCount; k++) {
       const ringMesh = new THREE.Mesh(this.ringGeom, this.ringMat);
       this.scene.add(ringMesh);
       this.rightRings.push(ringMesh);
@@ -195,7 +205,8 @@ export class Cloth {
   }
 
   _updateCameraFraming() {
-    const aspect = this.canvas.clientWidth / this.canvas.clientHeight;
+    if (!this.canvas || !this.camera) return;
+    const aspect = (this.canvas.clientWidth || 300) / (this.canvas.clientHeight || 400);
     this.camera.aspect = aspect;
     const visibleHeight = 4.84;
     this.camera.position.y = 0.065;
@@ -223,22 +234,22 @@ export class Cloth {
   }
 
   setAnchorOffset(dx) {
-    const maxDragDistance = this.canvas.clientWidth * 0.38;
+    const maxDragDistance = (this.canvas.clientWidth || 300) * 0.48;
     if (this.state.dragSide === 'left') {
       const targetBunch = Math.max(0, Math.min(1.0, -dx / maxDragDistance));
       gsap.to(this.state, {
         bunchLeft: targetBunch,
-        duration: 0.2,
+        duration: 0.45,
         overwrite: "auto",
-        ease: "power1.out"
+        ease: "power2.out"
       });
-    } else {
+    } else if (this.state.dragSide === 'right') {
       const targetBunch = Math.max(0, Math.min(1.0, dx / maxDragDistance));
       gsap.to(this.state, {
         bunchRight: targetBunch,
-        duration: 0.2,
+        duration: 0.45,
         overwrite: "auto",
-        ease: "power1.out"
+        ease: "power2.out"
       });
     }
   }
@@ -248,7 +259,7 @@ export class Cloth {
       gsap.to(this.state, {
         bunchLeft: 1.0,
         bunchRight: 1.0,
-        duration: 1.6,
+        duration: 1.2,
         overwrite: "auto",
         ease: "power2.inOut"
       });
@@ -263,6 +274,20 @@ export class Cloth {
     }
   }
 
+  slideOpen(onComplete) {
+    const isMobile = window.innerWidth <= 600;
+    gsap.to(this.state, {
+      bunchLeft: 1.0,
+      bunchRight: 1.0,
+      duration: isMobile ? 0.4 : 0.5,
+      overwrite: "auto",
+      ease: "power3.inOut",
+      onComplete: () => {
+        if (onComplete) onComplete();
+      }
+    });
+  }
+
   reset() {
     gsap.killTweensOf(this.state);
     this.state.bunchLeft = 0;
@@ -275,8 +300,8 @@ export class Cloth {
 
   _screenToWorld(x, y) {
     const rect = this.canvas.getBoundingClientRect();
-    const normX = (x / rect.width) * 2 - 1;
-    const normY = -(y / rect.height) * 2 + 1;
+    const normX = (x / (rect.width || 300)) * 2 - 1;
+    const normY = -(y / (rect.height || 400)) * 2 + 1;
 
     const vec = new THREE.Vector3(normX, normY, 0.5);
     vec.unproject(this.camera);
@@ -349,16 +374,17 @@ export class Cloth {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const aspect = rect.width / rect.height;
+    const w = rect.width || this.canvas.clientWidth || 300;
+    const h = rect.height || this.canvas.clientHeight || 400;
+    const aspect = w / h;
     this.curtainWidth = 4.84 * aspect * 0.93;
 
     if (this.leftGeometry) this.leftGeometry.dispose();
-    this.leftGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, this.opts.cols - 1, this.opts.rows - 1);
+    this.leftGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 + 0.05, this.curtainHeight, this.opts.cols - 1, this.opts.rows - 1);
     this.leftMesh.geometry = this.leftGeometry;
 
     if (this.rightGeometry) this.rightGeometry.dispose();
-    this.rightGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 - 0.09, this.curtainHeight, this.opts.cols - 1, this.opts.rows - 1);
+    this.rightGeometry = new THREE.PlaneGeometry(this.curtainWidth / 2 + 0.05, this.curtainHeight, this.opts.cols - 1, this.opts.rows - 1);
     this.rightMesh.geometry = this.rightGeometry;
 
     this.updateTextures();
@@ -367,15 +393,15 @@ export class Cloth {
       this.barMesh.scale.set(this.curtainWidth * 1.12, 1, 1);
     }
 
-    this.pixelTo3D = this.curtainWidth / rect.width;
+    this.pixelTo3D = this.curtainWidth / w;
     this.closeDX3D = this.opts.closeDX * this.pixelTo3D;
 
-    this.renderer.setSize(rect.width, rect.height, false);
+    this.renderer.setSize(w, h, false);
     this._updateCameraFraming();
   }
 
   tick(dt) {
-    if (!this.active) return;
+    if (!this.active || !this.leftGeometry || !this.rightGeometry) return;
 
     const dtClamped = Math.min(0.04, dt);
     this.time += dtClamped;
@@ -411,7 +437,11 @@ export class Cloth {
       const u = c / (cols - 1);
       const v = r / (rows - 1);
 
-      let targetX = -this.curtainWidth / 2 + u * (this.curtainWidth / 2 - 0.09) * (1.025 - this.state.bunchLeft * 0.82) + Math.cos(u * 7.0) * 0.045 * (1.0 - this.state.bunchLeft) * v;
+      const centerGap = 0.08;
+      const leftEndIdle = -centerGap / 2;
+      const leftEndBunches = -this.curtainWidth / 2 + 0.45;
+      const currentLeftEnd = leftEndIdle + (leftEndBunches - leftEndIdle) * this.state.bunchLeft;
+      let targetX = -this.curtainWidth / 2 + u * (currentLeftEnd - (-this.curtainWidth / 2)) + Math.cos(u * 7.0) * 0.045 * (1.0 - this.state.bunchLeft) * v;
       let targetY = this.topY - v * this.curtainHeight;
       let targetZ = Math.sin(u * 7.0) * 0.18 * (1.0 - this.state.bunchLeft * 0.85) * v;
 
@@ -459,9 +489,13 @@ export class Cloth {
       leftPosAttr.setXYZ(i, finalX, finalY, finalZ);
 
       if (r === 0) {
-        const ring = this.leftRings[c];
-        if (ring) {
-          ring.position.set(targetX, this.topY + 0.06, 0);
+        const ringStep = (cols - 1) / (this.ringCount - 1);
+        if (Math.abs((c % ringStep)) < 0.01 || c === cols - 1) {
+          const k = Math.min(this.ringCount - 1, Math.round(c / ringStep));
+          const ring = this.leftRings[k];
+          if (ring) {
+            ring.position.set(targetX, this.topY + 0.06, 0);
+          }
         }
       }
     }
@@ -475,7 +509,11 @@ export class Cloth {
       const u = c / (cols - 1);
       const v = r / (rows - 1);
 
-      let targetX = (this.curtainWidth / 2) * (this.state.bunchRight * 0.82) + 0.09 * (1.0 - this.state.bunchRight) + u * (this.curtainWidth / 2 - 0.09) * (1.025 - this.state.bunchRight * 0.82) + Math.cos(u * 7.0) * 0.045 * (1.0 - this.state.bunchRight) * v;
+      const centerGap = 0.08;
+      const rightStartIdle = centerGap / 2;
+      const rightStartBunches = this.curtainWidth / 2 - 0.45;
+      const currentRightStart = rightStartIdle + (rightStartBunches - rightStartIdle) * this.state.bunchRight;
+      let targetX = currentRightStart + u * (this.curtainWidth / 2 - currentRightStart) + Math.cos(u * 7.0) * 0.045 * (1.0 - this.state.bunchRight) * v;
       let targetY = this.topY - v * this.curtainHeight;
       let targetZ = Math.sin(u * 7.0) * 0.18 * (1.0 - this.state.bunchRight * 0.85) * v;
 
@@ -523,9 +561,13 @@ export class Cloth {
       rightPosAttr.setXYZ(i, finalX, finalY, finalZ);
 
       if (r === 0) {
-        const ring = this.rightRings[c];
-        if (ring) {
-          ring.position.set(targetX, this.topY + 0.06, 0);
+        const ringStep = (cols - 1) / (this.ringCount - 1);
+        if (Math.abs((c % ringStep)) < 0.01 || c === cols - 1) {
+          const k = Math.min(this.ringCount - 1, Math.round(c / ringStep));
+          const ring = this.rightRings[k];
+          if (ring) {
+            ring.position.set(targetX, this.topY + 0.06, 0);
+          }
         }
       }
     }

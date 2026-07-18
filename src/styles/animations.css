@@ -122,3 +122,20 @@
 
 /* Utility classes -------------------------------------------- */
 .anim-fade-rise { animation: fade-rise 0.5s var(--ease-soft) both; }
+
+/* ----- Camera Rig Zoom In/Out Transitions -------------------- */
+.camera-rig {
+  will-change: transform, filter;
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), filter 0.8s ease;
+  transform-origin: 50% 60%;
+}
+
+.camera-rig.is-zooming-in {
+  transform: scale(3.2) translate3d(0, 4%, 0);
+  filter: brightness(1.2);
+}
+
+.camera-rig.is-zooming-out {
+  transform: scale(1) translate3d(0, 0, 0);
+  filter: brightness(1);
+}

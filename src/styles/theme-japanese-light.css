@@ -191,19 +191,24 @@ body::before {
   z-index: 1;
   top: 50%;
   left: 50%;
-  width: 100%;
-  color: rgba(255,250,240,.62);
-  font: 700 .62rem/1.4 'Space Grotesk', sans-serif;
-  letter-spacing: .18em;
+  width: 90%;
+  color: #fff8e7;
+  font-family: 'Nority', 'Space Grotesk', sans-serif;
+  font-size: clamp(0.75rem, 2.5vw, 1rem);
+  font-weight: 800;
+  letter-spacing: .2em;
   text-align: center;
-  pointer-events: none;
-  animation: hint-pulse 2.2s infinite ease-in-out;
+  pointer-events: auto;
+  cursor: pointer;
+  text-shadow: 0 0 10px rgba(255, 200, 100, 0.9), 0 0 20px rgba(217, 119, 6, 0.7), 0 2px 4px rgba(0,0,0,0.9);
+  animation: hint-pulse 2s infinite ease-in-out;
+  user-select: none;
 }
 @keyframes hint-pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.72; }
-  50% { transform: translate(-50%, -52%) scale(1.05); opacity: 0.95; }
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.85; }
+  50% { transform: translate(-50%, -52%) scale(1.06); opacity: 1; text-shadow: 0 0 15px rgba(255, 220, 120, 1), 0 0 25px rgba(234, 88, 12, 0.9); }
 }
-.curtain-hint span { color: #f0c77e; }
+.curtain-hint span { color: #ffd700; }
 .entrance__dark { background: radial-gradient(ellipse, #321f2a, #161922); }
 .entrance__interior-dark { background: radial-gradient(ellipse, #5f3040, #171923); }
 

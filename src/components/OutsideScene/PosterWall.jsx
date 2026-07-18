@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from 'react';
 
 const POSTERS = Array.from({ length: 15 }, (_, i) => {
   const num = String(i + 1).padStart(2, '0');
-  return `./assets/poster-${num}.png`;
+  const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+  return `${baseUrl}assets/poster-${num}.png`;
 });
 
 export default function PosterWall() {
@@ -230,7 +231,6 @@ export default function PosterWall() {
         aria-label="Randomize posters"
         onClick={randomizePosters}
       >
-        <span className="booth__btn-randomize-icon">🎲</span>
         <span>RANDOMIZE</span>
       </button>
     </div>

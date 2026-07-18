@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import NeonSign from './NeonSign';
+import SignBoard from './SignBoard';
 import PosterWall from './PosterWall';
 import PrinterSlot from './PrinterSlot';
 import CurtainCanvas from '../CurtainCanvas/CurtainCanvas';
 
 export default function OutsideScene({
   hidden,
+  theme,
   onEnterBooth,
   currentScene,
   isTransitioning,
@@ -14,14 +15,20 @@ export default function OutsideScene({
   lampStatus,
   motorActive,
   instructionText,
-  onDetachSlot
+  onDetachSlot,
+  onPlayClawGame
 }) {
-  const [vendingDispensed, setVendingDispensed] = useState(false);
+  const [clawClicked, setClawClicked] = useState(false);
 
-  const handleVendingClick = () => {
-    setVendingDispensed(true);
-    setTimeout(() => setVendingDispensed(false), 1200);
+  const handleClawClick = () => {
+    setClawClicked(true);
+    setTimeout(() => setClawClicked(false), 1200);
+    if (onPlayClawGame) {
+      onPlayClawGame();
+    }
   };
+
+  const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
 
   return (
     <section
@@ -45,7 +52,7 @@ export default function OutsideScene({
           <div className="booth__cornice-trim"></div>
         </div>
 
-        <NeonSign />
+        <SignBoard theme={theme} />
 
         <div className="booth__body">
           <PosterWall />
@@ -53,7 +60,13 @@ export default function OutsideScene({
           <div className="booth__entrance">
             <div className="entrance__frame">
               <div className="entrance__dark"></div>
-              <div className="curtain-hint">PULL CURTAIN<br /><span>TO ENTER</span></div>
+              <div
+                className="curtain-hint"
+                onClick={onEnterBooth}
+                title="Click or pull curtain to enter"
+              >
+                PULL CURTAIN<br /><span>TO ENTER</span>
+              </div>
               <CurtainCanvas
                 onEnterBooth={onEnterBooth}
                 currentScene={currentScene}
@@ -76,12 +89,13 @@ export default function OutsideScene({
             />
 
             <div
-              className={`booth-vending-decal ${vendingDispensed ? 'is-dispensing' : ''}`}
-              onClick={handleVendingClick}
-              title="Click vending machine to insert coin!"
+              className={`booth-claw-decal ${clawClicked ? 'is-dispensing' : ''}`}
+              onClick={handleClawClick}
+              title="Click to Play Claw Machine Game!"
             >
-              <img src="./assets/wending.png" alt="Vending Machine" />
-              {vendingDispensed && <div className="vending-coin-anim">🪙 CLINK!</div>}
+              <img src={`${baseUrl}assets/claw-machine.png`} alt="Claw Machine" />
+              <div className="claw-play-badge">PLAY</div>
+              {clawClicked && <div className="vending-coin-anim">👾 PLAY!</div>}
             </div>
           </div>
         </div>

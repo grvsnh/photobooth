@@ -41,6 +41,8 @@ export default function CurtainCanvas({ onEnterBooth, currentScene, isTransition
     animFrame = requestAnimationFrame(renderLoop);
 
     let startX = 0;
+    let startY = 0;
+    let startTime = 0;
     let pullDistance = 0;
     let dragging = false;
 
@@ -48,11 +50,13 @@ export default function CurtainCanvas({ onEnterBooth, currentScene, isTransition
       if (isTransitioning || currentScene !== 'outside') return;
       const pos = UI.pointerPos(ev, canvas);
       startX = pos.x;
+      startY = pos.y;
+      startTime = performance.now();
       pullDistance = 0;
       
       const c = cloth.handlePointerDown(pos.x, pos.y);
-      dragging = !!c;
-      if (dragging) {
+      dragging = true;
+      if (c) {
         ev.preventDefault();
         UI.disableSelection();
       }
@@ -62,8 +66,9 @@ export default function CurtainCanvas({ onEnterBooth, currentScene, isTransition
       if (!dragging) return;
       const pos = UI.pointerPos(ev, canvas);
       const deltaX = pos.x - startX;
+      const deltaY = pos.y - startY;
 
-      const dragSide = cloth.state.dragSide;
+      const dragSide = cloth.state.dragSide || (pos.x < canvas.width / 2 ? 'left' : 'right');
       if (dragSide === 'left' && deltaX < 0) {
         cloth.setAnchorOffset(deltaX);
         pullDistance = Math.abs(deltaX);
@@ -71,12 +76,10 @@ export default function CurtainCanvas({ onEnterBooth, currentScene, isTransition
         cloth.setAnchorOffset(deltaX);
         pullDistance = Math.abs(deltaX);
       } else {
-        cloth.setAnchorOffset(0);
-        pullDistance = 0;
+        pullDistance = Math.hypot(deltaX, deltaY);
       }
 
       cloth.handlePointerMove(pos.x, pos.y);
-      ev.preventDefault();
     };
 
     const onUp = () => {
@@ -85,7 +88,11 @@ export default function CurtainCanvas({ onEnterBooth, currentScene, isTransition
       cloth.handlePointerUp();
       UI.enableSelection();
       
-      if (pullDistance > canvas.clientWidth * 0.35) {
+      const duration = performance.now() - startTime;
+      const isQuickTap = duration < 250 && pullDistance < 15;
+
+      if (isQuickTap || pullDistance > canvas.clientWidth * 0.28) {
+        cloth.slideOpen();
         onEnterBooth();
       } else {
         cloth.close('out');
