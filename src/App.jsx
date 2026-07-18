@@ -50,12 +50,12 @@ export default function App() {
   const [motorActive, setMotorActive] = useState(false);
   const [instructionText, setInstructionText] = useState('');
 
-  // Preview / Customizer state
+  // Preview / Customizer state (Date and Time off by default)
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewName, setPreviewName] = useState('');
   const [previewDate, setPreviewDate] = useState('');
-  const [includeDate, setIncludeDate] = useState(true);
-  const [includeTime, setIncludeTime] = useState(true);
+  const [includeDate, setIncludeDate] = useState(false);
+  const [includeTime, setIncludeTime] = useState(false);
   const [filterStyle, setFilterStyle] = useState('vintage');
   const [canDownload, setCanDownload] = useState(false);
 

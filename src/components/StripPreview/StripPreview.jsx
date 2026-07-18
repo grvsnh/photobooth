@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const FILTERS = [
   { id: 'vintage', emoji: '🎞️', tooltip: 'Vintage Sepia' },
@@ -27,6 +27,8 @@ export default function StripPreview({
   onNewPhoto,
   canDownload
 }) {
+  const [isZoomed, setIsZoomed] = useState(false);
+
   if (!isVisible) return null;
 
   const handleFilterSelect = (filterId) => {
@@ -88,6 +90,10 @@ export default function StripPreview({
     });
   };
 
+  const toggleZoom = () => {
+    setIsZoomed(prev => !prev);
+  };
+
   return (
     <>
       <div id="previewOverlay" className="preview-overlay preview-overlay--fixed"></div>
@@ -96,8 +102,14 @@ export default function StripPreview({
           <div className="strip-preview__eyebrow">YOUR PHOTO STRIP</div>
         </div>
 
-        <div className="strip-preview__canvas-container">
+        {/* Canvas Preview Container (Clicking opens fullscreen zoom) */}
+        <div
+          className="strip-preview__canvas-container"
+          onClick={toggleZoom}
+          title="Click to view full screen"
+        >
           <canvas ref={previewCanvasRef} id="previewCanvas" className="strip-preview__canvas"></canvas>
+          <div className="strip-preview__zoom-hint">🔍 CLICK TO ENLARGE</div>
         </div>
 
         <div className="strip-preview__form">
@@ -113,7 +125,7 @@ export default function StripPreview({
             onChange={handleNameChange}
           />
 
-          {/* Separate Date and Time Toggles */}
+          {/* Separate Date and Time Toggles (Off by default) */}
           <div className="strip-preview__toggles-grid">
             <label className="strip-preview__checkbox-item">
               <input
@@ -165,7 +177,7 @@ export default function StripPreview({
           </div>
         </div>
 
-        {/* Compact Icon Action Buttons */}
+        {/* Solid Single-Color Action Buttons */}
         <div className="strip-preview__compact-actions">
           <button
             id="downloadBtn"
@@ -191,6 +203,27 @@ export default function StripPreview({
           </button>
         </div>
       </div>
+
+      {/* Fullscreen Lightbox Modal when canvas is clicked */}
+      {isZoomed && (
+        <div className="strip-lightbox" onClick={toggleZoom} title="Click anywhere to close">
+          <div className="strip-lightbox__content" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="strip-lightbox__close"
+              onClick={toggleZoom}
+              aria-label="Close full screen view"
+            >
+              ×
+            </button>
+            <img
+              src={previewCanvasRef.current ? previewCanvasRef.current.toDataURL('image/png') : ''}
+              alt="Photo Strip Fullscreen View"
+              className="strip-lightbox__img"
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

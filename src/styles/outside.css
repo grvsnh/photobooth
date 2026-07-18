@@ -172,7 +172,7 @@
   box-shadow: inset 0 2px 3px rgba(0,0,0,0.8), inset 0 -1px 0 rgba(255,200,140,0.05);
 }
 
-/* Randomize Button Styling ----------------------------------- */
+/* Mustard Yellow Single-Color Randomize Button ---------------- */
 .booth__btn-randomize {
   display: flex;
   align-items: center;
@@ -180,21 +180,18 @@
   gap: 8px;
   width: 90%;
   padding: 10px 16px;
-  background: linear-gradient(135deg, #ff0077 0%, #ff7700 50%, #ffdd00 100%);
-  border: 2px solid #fff;
-  border-radius: 24px;
+  background-color: #d97706;
+  border: 2px solid #1a1209;
+  border-radius: 22px;
   color: #fff;
   font-family: 'Nority', var(--font-display);
   font-size: 0.85rem;
   font-weight: bold;
   letter-spacing: 0.15em;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
   cursor: pointer;
-  box-shadow:
-    0 4px 15px rgba(255,0,119,0.5),
-    0 0 10px rgba(255,119,0,0.4),
-    inset 0 2px 0 rgba(255,255,255,0.4);
-  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3);
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .booth__btn-randomize-icon {
@@ -202,16 +199,13 @@
 }
 
 .booth__btn-randomize:hover {
-  transform: translateY(-2px) scale(1.05);
-  filter: brightness(1.15);
-  box-shadow:
-    0 6px 20px rgba(255,0,119,0.7),
-    0 0 15px rgba(255,221,0,0.6),
-    inset 0 2px 0 rgba(255,255,255,0.6);
+  background-color: #b45309;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.4);
 }
 
 .booth__btn-randomize:active {
-  transform: translateY(1px) scale(0.98);
+  transform: translateY(1px);
 }
 
 /* ============================================================
