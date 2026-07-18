@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import NeonSign from './NeonSign';
 import PosterWall from './PosterWall';
 import PrinterSlot from './PrinterSlot';
@@ -16,6 +16,13 @@ export default function OutsideScene({
   instructionText,
   onDetachSlot
 }) {
+  const [vendingDispensed, setVendingDispensed] = useState(false);
+
+  const handleVendingClick = () => {
+    setVendingDispensed(true);
+    setTimeout(() => setVendingDispensed(false), 1200);
+  };
+
   return (
     <section
       id="sceneOutside"
@@ -68,8 +75,13 @@ export default function OutsideScene({
               onDetach={onDetachSlot}
             />
 
-            <div className="booth-vending-decal">
+            <div
+              className={`booth-vending-decal ${vendingDispensed ? 'is-dispensing' : ''}`}
+              onClick={handleVendingClick}
+              title="Click vending machine to insert coin!"
+            >
               <img src="./assets/wending.png" alt="Vending Machine" />
+              {vendingDispensed && <div className="vending-coin-anim">🪙 CLINK!</div>}
             </div>
           </div>
         </div>

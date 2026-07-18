@@ -362,12 +362,23 @@ export default function App() {
     renderLoop();
   };
 
-  const detachStripFromSlot = () => {
+  const clearSlotBin = () => {
     if (pullAnimFrameRef.current) {
       cancelAnimationFrame(pullAnimFrameRef.current);
     }
     setPrinterLampStatus('idle');
     setInstructionText('');
+
+    // Clear photo from machine's physical photo bin slot
+    const canvas = slotCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  const detachStripFromSlot = () => {
+    clearSlotBin();
     showPreview(stripImageRef.current || baseStripCanvasRef.current);
     setIsBusy(false);
   };
@@ -458,12 +469,17 @@ export default function App() {
   };
 
   const handleNewPhoto = () => {
+    clearSlotBin();
     setCaptures([]);
     setPreviewVisible(false);
     setPreviewName('');
     setPreviewDate('');
-    setPrinterLampStatus('idle');
-    setInstructionText('');
+    setIsBusy(false);
+  };
+
+  const handleClosePreview = () => {
+    clearSlotBin();
+    setPreviewVisible(false);
     setIsBusy(false);
   };
 
@@ -478,7 +494,7 @@ export default function App() {
     const handleKeyDown = (ev) => {
       if (ev.key === 'Escape' || ev.code === 'Escape') {
         if (previewVisible) {
-          setPreviewVisible(false);
+          handleClosePreview();
         } else if (currentScene === 'inside') {
           handleExitInside();
         }
@@ -559,6 +575,7 @@ export default function App() {
         onApplyDetails={handleApplyDetails}
         onDownload={handleDownload}
         onNewPhoto={handleNewPhoto}
+        onClose={handleClosePreview}
         canDownload={canDownload}
       />
     </>

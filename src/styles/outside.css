@@ -209,53 +209,127 @@
 }
 
 /* ============================================================
-   Grand Shop Entry Neon Marquee Sign
+   Full-Width Neon Marquee Sign with Break & Swing Drop Effect
    ============================================================ */
-.neon {
+.neon--full-width {
   position: absolute;
-  top: -68px;
-  left: 50%;
-  transform-origin: top center;
-  transform: translateX(-50%) rotate(0deg);
+  top: -76px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  transform-origin: 92% 0%;
   z-index: 10;
   cursor: pointer;
-  will-change: transform;
-  display: inline-block;
+  transition: transform 0.7s cubic-bezier(0.68, -0.55, 0.27, 1.55);
 }
-.neon__backplate {
+
+.neon--full-width.is-broken {
+  transform: rotate(26deg) translateY(24px);
+}
+
+.neon__chain {
   position: absolute;
-  inset: -6px -12px;
+  top: -18px;
+  width: 3px;
+  height: 22px;
+  background: linear-gradient(180deg, var(--metal-light, #b8a98c), var(--metal-dark, #7a6a55));
+  box-shadow: 1px 0 0 rgba(0,0,0,0.5);
+  z-index: 1;
+  transition: height 0.3s ease, opacity 0.3s ease;
+}
+.neon__chain--left { left: 8%; }
+.neon__chain--right { right: 8%; }
+
+.neon--full-width.is-broken .neon__chain--left {
+  height: 6px;
+  opacity: 0.3;
+}
+
+.neon--full-width .neon__backplate {
+  position: absolute;
+  inset: -4px 0;
   background: linear-gradient(180deg, #1a0f08 0%, #0a0604 100%);
   border: 3px solid var(--metal-brass-light, #cfa861);
   border-radius: 8px;
   z-index: -1;
-  box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 0 10px rgba(207,168,97,0.3);
+  box-shadow: 0 0 25px rgba(0,0,0,0.85), inset 0 0 12px rgba(207,168,97,0.3);
 }
-.neon__tube {
+
+.neon--full-width .neon__tube {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 10px 24px;
-  font-family: 'Nority', 'Space Grotesk', sans-serif !important;
-  font-size: clamp(2.2rem, 4.5vw, 3.8rem);
-  letter-spacing: 0.15em;
+  width: 100%;
+  padding: 10px 0;
+  font-family: 'Nority', sans-serif !important;
+  font-size: clamp(2.4rem, 5vw, 4.2rem) !important;
+  letter-spacing: 0.2em;
   color: var(--neon-pink);
   text-shadow:
     0 0 10px var(--neon-pink),
-    0 0 20px var(--neon-pink),
-    0 0 40px rgba(255, 0, 102, 0.6);
+    0 0 25px var(--neon-pink),
+    0 0 50px rgba(255, 0, 102, 0.7);
   animation: neon-glow 3s ease-in-out infinite;
   white-space: nowrap;
 }
-.neon__title-main {
-  font-family: 'Nority', 'Space Grotesk', sans-serif !important;
-  font-size: inherit;
+
+.neon__sparks {
+  position: absolute;
+  top: -10px;
+  left: 6%;
+  font-size: 1.4rem;
+  pointer-events: none;
+  animation: spark-flash 0.3s steps(1) infinite;
 }
 
-.neon:hover .neon__tube { animation-duration: 1.2s; }
-.neon.is-flickering .neon__tube { animation: neon-flicker 0.6s steps(1, end) infinite; }
+@keyframes spark-flash {
+  0%, 100% { opacity: 1; transform: scale(1.2); }
+  50% { opacity: 0.2; transform: scale(0.8); }
+}
+
+/* Vending Machine Interactive Decal -------------------------- */
+.booth-vending-decal {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.booth-vending-decal:hover {
+  transform: scale(1.05);
+  filter: brightness(1.15);
+}
+.booth-vending-decal.is-dispensing {
+  animation: vending-shake 0.4s ease;
+}
+
+.vending-coin-anim {
+  position: absolute;
+  top: 40%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffaa00;
+  color: #000;
+  font-family: 'Nority', sans-serif;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 14px;
+  box-shadow: 0 0 12px rgba(255,170,0,0.8);
+  animation: coin-pop 0.8s ease forwards;
+  pointer-events: none;
+  z-index: 20;
+}
+
+@keyframes vending-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px) rotate(-2deg); }
+  75% { transform: translateX(4px) rotate(2deg); }
+}
+
+@keyframes coin-pop {
+  0% { transform: translate(-50%, 0) scale(0.5); opacity: 0; }
+  50% { transform: translate(-50%, -30px) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -10px) scale(1); opacity: 0; }
+}
 
 /* ============================================================
    Booth entrance + curtain frame

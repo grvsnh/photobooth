@@ -1,54 +1,36 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 export default function NeonSign() {
+  const [isBroken, setIsBroken] = useState(false);
   const [isFlickering, setIsFlickering] = useState(false);
   const signRef = useRef(null);
-  const angleRef = useRef(0);
-  const velRef = useRef(0);
-  const animFrameRef = useRef(null);
-
-  useEffect(() => {
-    let last = performance.now();
-    const damping = 0.985;
-
-    function frame(now) {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-
-      const torque = -0.06 * Math.sin(angleRef.current);
-      velRef.current += torque;
-      velRef.current *= damping;
-      angleRef.current += velRef.current * dt * 30;
-
-      if (signRef.current) {
-        signRef.current.style.transform = `translateX(-50%) rotate(${angleRef.current}rad)`;
-      }
-
-      animFrameRef.current = requestAnimationFrame(frame);
-    }
-
-    animFrameRef.current = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(animFrameRef.current);
-  }, []);
 
   const handleClick = () => {
     setIsFlickering(true);
-    setTimeout(() => setIsFlickering(false), 1200);
-    velRef.current += (Math.random() > 0.5 ? 1 : -1) * (0.15 + Math.random() * 0.15);
+    setTimeout(() => setIsFlickering(false), 1400);
+
+    // Toggle broken hanging state on click
+    setIsBroken(prev => !prev);
   };
 
   return (
     <div
       ref={signRef}
       id="neonSign"
-      className={`neon ${isFlickering ? 'is-flickering' : ''}`}
+      className={`neon neon--full-width ${isBroken ? 'is-broken' : ''} ${isFlickering ? 'is-flickering' : ''}`}
       onClick={handleClick}
-      title="Click to flicker & swing"
+      title="Click to break & swing sign!"
     >
+      <div className="neon__chain neon__chain--left"></div>
+      <div className="neon__chain neon__chain--right"></div>
+
+      <div className="neon__backplate"></div>
+      
       <div className="neon__tube">
         <span className="neon__title-main">PHOTOBOOTH</span>
       </div>
-      <div className="neon__backplate"></div>
+
+      {isBroken && <div className="neon__sparks" aria-hidden="true"><span>⚡</span><span>💥</span><span>⚡</span></div>}
     </div>
   );
 }

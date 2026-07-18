@@ -146,7 +146,7 @@
 }
 
 /* ============================================================
-   Strip Preview & Customizer Modal — Compact Design
+   Strip Preview & Customizer Modal — In-Place Zoom & Blur
    ============================================================ */
 
 .preview-overlay {
@@ -155,6 +155,13 @@
   z-index: 900;
   background: rgba(10, 7, 18, 0.88);
   backdrop-filter: blur(12px);
+  transition: background 0.3s ease, backdrop-filter 0.3s ease;
+  cursor: pointer;
+}
+
+.preview-overlay.is-zoomed-blur {
+  background: rgba(5, 3, 10, 0.95);
+  backdrop-filter: blur(28px);
 }
 
 .strip-preview--compact {
@@ -175,6 +182,21 @@
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  transition: transform 0.3s cubic-bezier(0.22, 0.8, 0.25, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.strip-preview.is-zoomed {
+  transform: translate(-50%, -50%) scale(1.32);
+  box-shadow: 0 30px 90px rgba(0,0,0,0.98), 0 0 45px rgba(255,170,0,0.45);
+  border-color: #ffaa00;
+}
+
+.strip-preview.is-zoomed .strip-preview__form,
+.strip-preview.is-zoomed .strip-preview__compact-actions {
+  opacity: 0.12;
+  pointer-events: none;
+  filter: blur(2px);
+  transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
 .strip-preview__eyebrow {
@@ -191,9 +213,12 @@
   border-radius: 4px;
   overflow: hidden;
   box-shadow: 0 8px 24px rgba(0,0,0,0.8);
+  transition: transform 0.25s ease;
 }
-.strip-preview__canvas-container:hover .strip-preview__zoom-hint {
-  opacity: 1;
+
+.strip-preview.is-zoomed .strip-preview__canvas-container {
+  cursor: zoom-out;
+  transform: scale(1.1);
 }
 
 .strip-preview__canvas {
@@ -201,29 +226,12 @@
   background: #fff;
 }
 
-.strip-preview__zoom-hint {
-  position: absolute;
-  bottom: 6px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.78);
-  color: #fff;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 3px 8px;
-  border-radius: 10px;
-  pointer-events: none;
-  opacity: 0.85;
-  transition: opacity 0.15s ease;
-}
-
 .strip-preview__form {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
 .strip-preview__input {
@@ -314,12 +322,13 @@
   transform: scale(1.1);
 }
 
-/* Solid Single-Color Action Buttons (No Gradients) */
+/* Solid Single-Color Action Buttons */
 .strip-preview__compact-actions {
   display: flex;
   gap: 10px;
   width: 100%;
   margin-top: 4px;
+  transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
 .strip-preview__btn {
@@ -359,54 +368,4 @@
 
 .strip-preview__btn:active {
   transform: translateY(2px);
-}
-
-/* Lightbox Fullscreen Modal */
-.strip-lightbox {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  background: rgba(0, 0, 0, 0.94);
-  backdrop-filter: blur(16px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  cursor: zoom-out;
-}
-
-.strip-lightbox__content {
-  position: relative;
-  max-width: 90vw;
-  max-height: 92vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.strip-lightbox__img {
-  max-width: 100%;
-  max-height: 88vh;
-  object-fit: contain;
-  border-radius: 8px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.9);
-}
-
-.strip-lightbox__close {
-  position: absolute;
-  top: -16px;
-  right: -16px;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #e11d48;
-  color: #fff;
-  border: 2px solid #fff;
-  font-size: 1.6rem;
-  line-height: 1;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-  z-index: 10;
 }
